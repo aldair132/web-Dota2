@@ -1,0 +1,43 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html { color-scheme: dark; }
+  body { @apply font-sans bg-brand-bg text-brand-text; }
+  :focus-visible { outline: 3px solid #D4A64A; outline-offset: 2px; }
+}
+
+/* Fondo del hero: brillo rojo tipo "Dire" y dorado tipo "Radiant" sobre rejilla tenue */
+.hero-bg {
+  background-color: #0B0E13;
+  background-image:
+    radial-gradient(ellipse 60% 70% at 15% 20%, rgba(194, 60, 42, .28), transparent 70%),
+    radial-gradient(ellipse 50% 60% at 85% 80%, rgba(212, 166, 74, .16), transparent 70%),
+    linear-gradient(rgba(255, 255, 255, .025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, .025) 1px, transparent 1px);
+  background-size: auto, auto, 40px 40px, 40px 40px;
+}
+.texto-oro {
+  background: linear-gradient(180deg, #F3D9A0 0%, #D4A64A 55%, #9C7428 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+::-webkit-scrollbar { width: 8px; }
+::-webkit-scrollbar-track { background: #0B0E13; }
+::-webkit-scrollbar-thumb { background: #2A3342; border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: #8E2A1D; }
+
+/* La card toma el color de su rareza vía --rareza */
+.product-card { transition: transform .3s ease, box-shadow .3s ease, border-color .3s ease; }
+.product-card:hover {
+  transform: translateY(-5px);
+  border-color: var(--rareza);
+  box-shadow: 0 12px 30px -8px color-mix(in srgb, var(--rareza) 45%, transparent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .product-card { transition: none; }
+  .product-card:hover { transform: none; }
+}
