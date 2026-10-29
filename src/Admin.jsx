@@ -1,15 +1,25 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { supabase, BUCKET } from './supabase.js'
-import { soles, RAREZAS, colorRareza } from './datos.js'
-import { comprimir } from './imagenes.js'
+import { supabase } from './supabase.js'
+import { soles, RAREZAS, ATRIBUTOS, ETIQUETAS, colorRareza, colorEtiqueta, idYoutube, puedeComprar } from './datos.js'
+import { HEROES } from './heroes.js'
+import { campo, etiqueta, subirImagen, borrarImagenes } from './adminUi.js'
 import Categorias from './Categorias.jsx'
+import AdminTestimonios from './AdminTestimonios.jsx'
+import Pedidos from './Pedidos.jsx'
 import Icono from './Icons.jsx'
 
-const VACIO = { nombre: '', categoria: '', heroe: '', rareza: 'Inmortal', precio: '', descripcion: '', disponible: true, fotos: [] }
+const VACIO = {
+  nombre: '', categoria: '', heroe: '', atributo: '', rareza: 'Inmortal', precio: '', precio_antes: '', etiqueta: '',
+  descripcion: '', video_url: '', stock: '', destacado: false, vendido: false, disponible: true, fotos: [],
+}
 const POR_PAGINA = 10
-const rutaDeUrl = (url) => url.split(`/${BUCKET}/`)[1]
-const campo = 'w-full px-3 py-2 text-sm border border-brand-borde rounded-lg focus:outline-none focus:border-brand-gold bg-brand-bg text-brand-text placeholder:text-brand-muted'
-const etiqueta = 'block text-xs font-semibold text-brand-muted uppercase tracking-wider mb-1'
+const PESTANAS = [
+  { id: 'lista', nombre: 'Items' },
+  { id: 'cats', nombre: 'Categorías' },
+  { id: 'testi', nombre: 'Testimonios' },
+  { id: 'pedidos', nombre: 'Ventas' },
+]
+const numOVacio = (v) => (v === '' || v == null ? null : Number(v))
 
 export default function AdminModal({ sesion, productos, categorias, onCambio, onCerrar }) {
   return (
@@ -57,7 +67,7 @@ function Interruptor({ activo, onClick, etiqueta: texto }) {
 }
 
 function Panel({ productos, categorias, onCambio }) {
-  const [vista, setVista] = useState('lista') // 'lista' | 'form' | 'cats'
+  const [vista, setVista] = useState('lista') // 'lista' | 'form' | 'cats' | 'testi' | 'pedidos'
   const [form, setForm] = useState(VACIO)
   const [editId, setEditId] = useState(null)
   const [nuevas, setNuevas] = useState([])
@@ -88,6 +98,8 @@ function Panel({ productos, categorias, onCambio }) {
       if (fCat !== 'todas' && p.categoria !== fCat) return false
       if (fEstado === 'visibles' && !p.disponible) return false
       if (fEstado === 'ocultos' && p.disponible) return false
+      if (fEstado === 'destacados' && !p.destacado) return false
+      if (fEstado === 'agotados' && puedeComprar(p)) return false
       return !t || p.nombre.toLowerCase().includes(t) || (p.heroe || '').toLowerCase().includes(t)
     })
   }, [productos, q, fCat, fEstado])
@@ -100,39 +112,40 @@ function Panel({ productos, categorias, onCambio }) {
 
   const editar = (p) => {
     setEditId(p.id)
-    setForm({ nombre: p.nombre, categoria: p.categoria, heroe: p.heroe ?? '', rareza: p.rareza ?? '', precio: p.precio ?? '', descripcion: p.descripcion ?? '', disponible: p.disponible, fotos: p.fotos })
+    setForm({
+      nombre: p.nombre, categoria: p.categoria, heroe: p.heroe ?? '', atributo: p.atributo ?? '', rareza: p.rareza ?? '',
+      precio: p.precio ?? '', precio_antes: p.precio_antes ?? '', etiqueta: p.etiqueta ?? '', descripcion: p.descripcion ?? '',
+      video_url: p.video_url ?? '', stock: p.stock ?? '', destacado: !!p.destacado, vendido: !!p.vendido, disponible: p.disponible, fotos: p.fotos,
+    })
     setNuevas([])
     setMsg('')
     setVista('form')
   }
 
-  const subirFotos = async () => {
-    const urls = []
-    for (const f of nuevas) {
-      const { blob, ext, type } = await comprimir(f)
-      const ruta = `${crypto.randomUUID()}.${ext}`
-      const { error } = await supabase.storage.from(BUCKET).upload(ruta, blob, { contentType: type })
-      if (error) throw error
-      urls.push(supabase.storage.from(BUCKET).getPublicUrl(ruta).data.publicUrl)
-    }
-    return urls
-  }
-
   const guardar = async (e) => {
     e.preventDefault()
     const otro = e.nativeEvent.submitter?.dataset.otro === 'si'
+    if (form.video_url.trim() && !idYoutube(form.video_url)) { setMsg('El enlace del video debe ser de YouTube.'); return }
     setGuardando(true)
     setMsg('')
     try {
       const original = editId ? productos.find((p) => p.id === editId)?.fotos || [] : []
-      const subidas = await subirFotos()
+      const subidas = []
+      for (const f of nuevas) subidas.push(await subirImagen(f))
       const fila = {
         nombre: form.nombre,
         categoria: form.categoria,
         heroe: form.heroe.trim() || null,
+        atributo: form.atributo || null,
         rareza: form.rareza || null,
         precio: Number(form.precio),
+        precio_antes: numOVacio(form.precio_antes),
+        etiqueta: form.etiqueta || null,
         descripcion: form.descripcion,
+        video_url: form.video_url.trim() || null,
+        stock: numOVacio(form.stock),
+        destacado: form.destacado,
+        vendido: form.vendido,
         disponible: form.disponible,
         fotos: [...form.fotos, ...subidas],
       }
@@ -142,30 +155,29 @@ function Panel({ productos, categorias, onCambio }) {
       if (error) throw error
 
       // Borra del almacenamiento las fotos que se quitaron al editar
-      const quitadas = original.filter((u) => !form.fotos.includes(u)).map(rutaDeUrl).filter(Boolean)
-      if (quitadas.length) await supabase.storage.from(BUCKET).remove(quitadas)
+      await borrarImagenes(original.filter((u) => !form.fotos.includes(u)))
 
       setMsg(editId ? 'Item actualizado.' : 'Item creado.')
       limpiar()
       onCambio()
       if (!otro) setVista('lista')
     } catch (err) {
-      setMsg('No se pudo guardar: ' + err.message)
+      const falta = /column|schema cache/i.test(err.message)
+      setMsg('No se pudo guardar: ' + err.message + (falta ? ' → Ejecuta otra vez supabase.sql en Supabase para crear las columnas nuevas.' : ''))
     } finally {
       setGuardando(false)
     }
   }
 
-  const alternarVisible = async (p) => {
-    const { error } = await supabase.from('productos').update({ disponible: !p.disponible }).eq('id', p.id)
+  const actualizar = async (p, cambio) => {
+    const { error } = await supabase.from('productos').update(cambio).eq('id', p.id)
     setMsg(error ? 'No se pudo cambiar: ' + error.message : '')
     onCambio()
   }
 
   const borrar = async (p) => {
     if (!confirm(`¿Eliminar "${p.nombre}"? No se puede deshacer.`)) return
-    const rutas = p.fotos.map(rutaDeUrl).filter(Boolean)
-    if (rutas.length) await supabase.storage.from(BUCKET).remove(rutas)
+    await borrarImagenes(p.fotos)
     const { error } = await supabase.from('productos').delete().eq('id', p.id)
     setMsg(error ? 'No se pudo eliminar: ' + error.message : 'Item eliminado.')
     if (editId === p.id) limpiar()
@@ -174,21 +186,34 @@ function Panel({ productos, categorias, onCambio }) {
 
   const quitarFoto = (url) => set('fotos', form.fotos.filter((u) => u !== url))
   const hacerPortada = (url) => set('fotos', [url, ...form.fotos.filter((u) => u !== url)])
+  const pestana = vista === 'form' ? 'lista' : vista
 
   return (
     <>
-      <div className="shrink-0 px-4 sm:px-6 pt-4 sm:pt-5 pb-3 border-b border-brand-borde pr-14">
+      <div className="shrink-0 px-4 sm:px-6 pt-4 sm:pt-5 border-b border-brand-borde pr-14">
         <h2 className="font-serif text-2xl sm:text-3xl font-bold text-brand-gold flex items-center gap-2">
           <Icono n="sliders" className="w-5 h-5 text-brand-red" /> Panel de administración
         </h2>
         <button onClick={() => supabase.auth.signOut()} className="text-xs text-brand-gold underline mt-1">Cerrar sesión</button>
+        <div role="tablist" className="flex gap-1 mt-3 overflow-x-auto [scrollbar-width:none]">
+          {PESTANAS.map((t) => (
+            <button key={t.id} role="tab" aria-selected={pestana === t.id} onClick={() => { if (vista === 'form') limpiar(); setMsg(''); setVista(t.id) }}
+                    className={`px-4 py-2 text-sm font-semibold border-b-2 whitespace-nowrap transition ${pestana === t.id ? 'border-brand-red text-brand-gold' : 'border-transparent text-brand-muted hover:text-brand-text'}`}>
+              {t.nombre}
+            </button>
+          ))}
+        </div>
       </div>
 
       <div ref={cuerpo} className="flex-1 min-h-0 overflow-y-auto px-4 sm:px-6 pt-4">
-        {msg && vista !== 'cats' && <p role="status" className="text-sm mb-3 bg-brand-red/15 text-brand-gold border border-brand-red/40 rounded-lg px-3 py-2">{msg}</p>}
+        {msg && (vista === 'lista' || vista === 'form') && <p role="status" className="text-sm mb-3 bg-brand-red/15 text-brand-gold border border-brand-red/40 rounded-lg px-3 py-2">{msg}</p>}
 
         {vista === 'cats' ? (
           <Categorias categorias={categorias} productos={productos} onCambio={onCambio} onVolver={() => setVista('lista')} />
+        ) : vista === 'testi' ? (
+          <AdminTestimonios onCambio={onCambio} />
+        ) : vista === 'pedidos' ? (
+          <Pedidos productos={productos} onCambio={onCambio} />
         ) : vista === 'lista' ? (
           <div className="pb-6">
             <div className="flex flex-col sm:flex-row gap-2 mb-3">
@@ -201,12 +226,13 @@ function Panel({ productos, categorias, onCambio }) {
                 <option value="todas">Todas</option>
                 {opciones.map((c) => <option key={c.id} value={c.nombre}>{c.emoji} {c.nombre}</option>)}
               </select>
-              <select value={fEstado} onChange={(e) => setFEstado(e.target.value)} aria-label="Filtrar por estado" className={`${campo} sm:w-36`}>
+              <select value={fEstado} onChange={(e) => setFEstado(e.target.value)} aria-label="Filtrar por estado" className={`${campo} sm:w-40`}>
                 <option value="todos">Todos</option>
                 <option value="visibles">Visibles</option>
                 <option value="ocultos">Ocultos</option>
+                <option value="destacados">Destacados</option>
+                <option value="agotados">Vendidos / agotados</option>
               </select>
-              <button onClick={() => setVista('cats')} className="border border-brand-gold/60 text-brand-gold hover:bg-brand-gold/10 px-4 py-2 rounded-lg text-sm font-semibold transition whitespace-nowrap">Categorías</button>
               <button onClick={nuevo} className="bg-brand-red hover:bg-brand-redDark text-white px-4 py-2 rounded-lg text-sm font-semibold transition whitespace-nowrap">+ Nuevo item</button>
             </div>
 
@@ -214,23 +240,29 @@ function Panel({ productos, categorias, onCambio }) {
 
             <ul className="space-y-2">
               {filtrados.slice(0, limite).map((p) => (
-                <li key={p.id} className="flex items-center gap-3 p-3 bg-brand-panel2 border border-brand-borde rounded-xl" style={{ borderLeft: `4px solid ${colorRareza(p.rareza)}` }}>
+                <li key={p.id} className="flex flex-wrap sm:flex-nowrap items-center gap-3 p-3 bg-brand-panel2 border border-brand-borde rounded-xl" style={{ borderLeft: `4px solid ${colorRareza(p.rareza)}` }}>
                   {p.fotos[0]
                     ? <img src={p.fotos[0]} alt="" className="w-20 h-12 shrink-0 object-cover rounded-md border border-brand-borde" />
                     : <span className="w-20 h-12 shrink-0 rounded-md bg-brand-bg grid place-items-center text-brand-muted text-xs">Sin foto</span>}
                   <div className="min-w-0 flex-1">
-                    <p className="font-semibold text-brand-text truncate">{p.nombre}</p>
+                    <p className="font-semibold text-brand-text truncate">
+                      {p.destacado && <span title="Destacado" className="text-brand-gold mr-1">★</span>}{p.nombre}
+                    </p>
                     <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-brand-muted">
                       <span>{p.categoria}</span>
                       {p.heroe && <span>{p.heroe}</span>}
                       {p.rareza && <span style={{ color: colorRareza(p.rareza) }}>{p.rareza}</span>}
                       {p.precio != null && <span className="font-bold text-brand-gold">{soles(p.precio)}</span>}
-                      <span>{p.fotos.length} foto(s)</span>
+                      {p.etiqueta && <span className="px-1.5 rounded text-white" style={{ background: colorEtiqueta(p.etiqueta) }}>{p.etiqueta}</span>}
+                      {p.stock != null && <span className={p.stock > 0 ? '' : 'text-red-300'}>Stock: {p.stock}</span>}
+                      {p.vendido && <span className="text-red-300 font-semibold">Vendido</span>}
                     </div>
                   </div>
-                  <div className="flex items-center gap-2 shrink-0">
+                  <div className="flex items-center gap-2 shrink-0 ml-auto">
+                    <button onClick={() => actualizar(p, { destacado: !p.destacado })} aria-label={p.destacado ? 'Quitar de destacados' : 'Marcar como destacado'} title={p.destacado ? 'Quitar de destacados' : 'Destacar'}
+                            className={`p-2 rounded-lg ${p.destacado ? 'bg-brand-gold/20 text-brand-gold' : 'bg-brand-bg text-brand-muted hover:text-brand-gold'}`}><Icono n="star" className={`w-4 h-4 ${p.destacado ? 'fill-current' : ''}`} /></button>
                     <span className="hidden sm:inline text-[11px] text-brand-muted">{p.disponible ? 'Visible' : 'Oculto'}</span>
-                    <Interruptor activo={p.disponible} etiqueta={p.disponible ? 'Ocultar de la tienda' : 'Mostrar en la tienda'} onClick={() => alternarVisible(p)} />
+                    <Interruptor activo={p.disponible} etiqueta={p.disponible ? 'Ocultar de la tienda' : 'Mostrar en la tienda'} onClick={() => actualizar(p, { disponible: !p.disponible })} />
                     <button onClick={() => editar(p)} aria-label={`Editar ${p.nombre}`} className="bg-blue-500/10 text-blue-300 hover:bg-blue-500/20 p-2 rounded-lg"><Icono n="edit" /></button>
                     <button onClick={() => borrar(p)} aria-label={`Eliminar ${p.nombre}`} className="bg-red-500/10 text-red-300 hover:bg-red-500/20 p-2 rounded-lg"><Icono n="trash" /></button>
                   </div>
@@ -265,17 +297,41 @@ function Panel({ productos, categorias, onCambio }) {
                 </select>
                 <button type="button" onClick={() => setVista('cats')} className="text-[11px] text-brand-gold underline mt-1">Administrar categorías</button>
               </label>
-              <label><span className={etiqueta}>Héroe</span><input value={form.heroe} onChange={(e) => set('heroe', e.target.value)} placeholder="Ej: Juggernaut (vacío si no aplica)" className={campo} /></label>
+              <label><span className={etiqueta}>Héroe</span>
+                <input list="lista-heroes" value={form.heroe} onChange={(e) => set('heroe', e.target.value)} placeholder="Escribe y elige (vacío si no aplica)" className={campo} />
+                <datalist id="lista-heroes">{HEROES.map((h) => <option key={h} value={h} />)}</datalist>
+              </label>
+              <label><span className={etiqueta}>Atributo del héroe</span>
+                <select value={form.atributo} onChange={(e) => set('atributo', e.target.value)} className={campo}>
+                  <option value="">Sin atributo</option>
+                  {ATRIBUTOS.map((a) => <option key={a.nombre} value={a.nombre}>{a.icono} {a.nombre}</option>)}
+                </select>
+              </label>
               <label><span className={etiqueta}>Rareza</span>
                 <select value={form.rareza} onChange={(e) => set('rareza', e.target.value)} className={campo} style={{ color: colorRareza(form.rareza) }}>
                   <option value="">Sin rareza</option>
                   {RAREZAS.map((r) => <option key={r.nombre} value={r.nombre} style={{ color: r.color }}>{r.nombre}</option>)}
                 </select>
               </label>
+              <label><span className={etiqueta}>Etiqueta</span>
+                <select value={form.etiqueta} onChange={(e) => set('etiqueta', e.target.value)} className={campo}>
+                  <option value="">Sin etiqueta</option>
+                  {ETIQUETAS.map((t) => <option key={t.nombre} value={t.nombre}>{t.nombre}</option>)}
+                </select>
+              </label>
             </div>
 
-            <label className="block"><span className={etiqueta}>Precio (S/)</span><input required type="number" step="0.01" min="0" value={form.precio} onChange={(e) => set('precio', e.target.value)} placeholder="25.00" className={campo} /></label>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <label><span className={etiqueta}>Precio (S/)</span><input required type="number" step="0.01" min="0" value={form.precio} onChange={(e) => set('precio', e.target.value)} placeholder="25.00" className={campo} /></label>
+              <label><span className={etiqueta}>Precio antes (oferta)</span><input type="number" step="0.01" min="0" value={form.precio_antes} onChange={(e) => set('precio_antes', e.target.value)} placeholder="Vacío si no hay oferta" className={campo} /></label>
+              <label><span className={etiqueta}>Stock</span><input type="number" step="1" min="0" value={form.stock} onChange={(e) => set('stock', e.target.value)} placeholder="Vacío = sin límite" className={campo} /></label>
+            </div>
+            {form.precio_antes !== '' && Number(form.precio_antes) <= Number(form.precio) && (
+              <p className="text-xs text-amber-400 -mt-2">El "precio antes" debe ser mayor que el precio para que se muestre como oferta.</p>
+            )}
+
             <label className="block"><span className={etiqueta}>Descripción</span><textarea rows="3" value={form.descripcion} onChange={(e) => set('descripcion', e.target.value)} placeholder="Piezas incluidas, estilos desbloqueables, efectos…" className={campo} /></label>
+            <label className="block"><span className={etiqueta}>Video de YouTube (opcional)</span><input type="url" value={form.video_url} onChange={(e) => set('video_url', e.target.value)} placeholder="https://www.youtube.com/watch?v=..." className={campo} /></label>
 
             {form.fotos.length > 0 && (
               <div>
@@ -306,7 +362,11 @@ function Panel({ productos, categorias, onCambio }) {
               <p className="text-[11px] text-brand-muted mt-1">Puedes elegir varias. Se reducen de tamaño automáticamente. La primera es la portada (se ve mejor en formato horizontal 16:9).</p>
             </div>
 
-            <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={form.disponible} onChange={(e) => set('disponible', e.target.checked)} className="accent-brand-red" /> Visible en la tienda</label>
+            <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm">
+              <label className="flex items-center gap-2"><input type="checkbox" checked={form.disponible} onChange={(e) => set('disponible', e.target.checked)} className="accent-brand-red" /> Visible en la tienda</label>
+              <label className="flex items-center gap-2"><input type="checkbox" checked={form.destacado} onChange={(e) => set('destacado', e.target.checked)} className="accent-brand-red" /> ★ Destacado</label>
+              <label className="flex items-center gap-2"><input type="checkbox" checked={form.vendido} onChange={(e) => set('vendido', e.target.checked)} className="accent-brand-red" /> Vendido (se ve pero no se puede comprar)</label>
+            </div>
 
             {/* Botones fijos abajo */}
             <div className="sticky bottom-0 bg-brand-panel border-t border-brand-borde py-3 flex flex-wrap justify-end gap-2">

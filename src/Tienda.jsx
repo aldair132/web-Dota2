@@ -1,44 +1,63 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { supabase, configurado, DISCORD_URL } from './supabase.js'
-import { TIENDA, soles, enlaceWhatsApp, RAREZAS, colorRareza, DEMO } from './datos.js'
+import { TIENDA, enlaceWhatsApp, RAREZAS, ATRIBUTOS, colorRareza, puedeComprar, maxCantidad, idYoutube, DEMO } from './datos.js'
 import Carrusel from './Carrusel.jsx'
+import Tarjeta, { Rareza, Heroe, Etiqueta, Precio, Agotado, descuento } from './Tarjeta.jsx'
+import Carrito from './Carrito.jsx'
+import { ComoComprar, Testimonios, MetodosPago } from './Secciones.jsx'
 import AdminModal from './Admin.jsx'
 import Icono from './Icons.jsx'
 
 const hashAdmin = () => window.location.hash.startsWith('#/admin')
 const hashProducto = () => window.location.hash.match(/^#\/producto\/([0-9a-f-]{36})/i)?.[1] || null
 
-function Rareza({ r, className = '' }) {
-  if (!r) return null
-  const c = colorRareza(r)
-  return (
-    <span className={`inline-flex items-center gap-1.5 text-[10px] sm:text-[11px] font-bold uppercase tracking-wider px-2.5 py-1 rounded ${className}`}
-          style={{ color: c, background: `${c}1f`, border: `1px solid ${c}66` }}>
-      <span className="w-1.5 h-1.5 rounded-full" style={{ background: c }} />{r}
-    </span>
-  )
+const ORDENES = {
+  recientes: { etiqueta: 'Más recientes', fn: (a, b) => String(b.creado_en).localeCompare(String(a.creado_en)) },
+  'precio-asc': { etiqueta: 'Precio: menor a mayor', fn: (a, b) => (a.precio ?? Infinity) - (b.precio ?? Infinity) },
+  'precio-desc': { etiqueta: 'Precio: mayor a menor', fn: (a, b) => (b.precio ?? -1) - (a.precio ?? -1) },
+  descuento: { etiqueta: 'Mayor descuento', fn: (a, b) => descuento(b) - descuento(a) },
 }
+
+// El carrito se guarda en el navegador para no perderlo al recargar
+const leerCarrito = () => {
+  try { return JSON.parse(localStorage.getItem('carrito')) || [] } catch { return [] }
+}
+
+const chip = (activo) =>
+  `shrink-0 whitespace-nowrap px-4 py-2 rounded-lg text-xs sm:text-sm font-semibold transition ${activo ? 'bg-brand-red text-white shadow-[0_0_14px_rgba(194,60,42,.45)]' : 'bg-brand-panel text-brand-text/80 hover:bg-brand-panel2 border border-brand-borde'}`
+const filaScroll = 'flex gap-2 overflow-x-auto md:flex-wrap pb-1 -mx-3 px-3 md:mx-0 md:px-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden'
+const campo = 'bg-brand-panel border border-brand-borde text-base md:text-sm rounded-lg px-3 py-2 text-brand-text placeholder:text-brand-muted focus:outline-none focus:border-brand-gold'
 
 export default function Tienda() {
   const [productos, setProductos] = useState(null)
   const [categorias, setCategorias] = useState([])
+  const [testimonios, setTestimonios] = useState([])
   const [error, setError] = useState('')
   const [cat, setCat] = useState('todos')
   const [rar, setRar] = useState('todas')
+  const [atr, setAtr] = useState('todos')
+  const [orden, setOrden] = useState('recientes')
+  const [pMin, setPMin] = useState('')
+  const [pMax, setPMax] = useState('')
   const [q, setQ] = useState('')
   const [detalleId, setDetalleId] = useState(hashProducto())
   const [sesion, setSesion] = useState(null)
   const [admin, setAdmin] = useState(hashAdmin())
+  const [carrito, setCarrito] = useState(leerCarrito)
+  const [verCarrito, setVerCarrito] = useState(false)
+  const [aviso, setAviso] = useState('')
 
   const cargar = useCallback(async () => {
-    if (!configurado) { setProductos(DEMO.productos); setCategorias(DEMO.categorias); return }
-    const [p, c] = await Promise.all([
+    if (!configurado) { setProductos(DEMO.productos); setCategorias(DEMO.categorias); setTestimonios(DEMO.testimonios); return }
+    const [p, c, t] = await Promise.all([
       supabase.from('productos').select('*').order('creado_en', { ascending: false }),
       supabase.from('categorias').select('*').order('orden', { ascending: true }),
+      supabase.from('testimonios').select('*').order('creado_en', { ascending: false }),
     ])
     if (p.error) setError('No se pudo cargar el catálogo. Recarga la página.')
     else { setError(''); setProductos(p.data) }
     setCategorias(c.error ? [] : c.data)
+    setTestimonios(t.error ? [] : t.data)
   }, [])
 
   useEffect(() => {
@@ -52,15 +71,44 @@ export default function Tienda() {
 
   useEffect(() => {
     const onHash = () => { setAdmin(hashAdmin()); const id = hashProducto(); if (id) setDetalleId(id) }
-    const onKey = (e) => { if (e.key === 'Escape') { cerrarDetalle(); cerrarAdmin() } }
+    const onKey = (e) => { if (e.key === 'Escape') { cerrarDetalle(); cerrarAdmin(); setVerCarrito(false) } }
     window.addEventListener('hashchange', onHash)
     window.addEventListener('keydown', onKey)
     return () => { window.removeEventListener('hashchange', onHash); window.removeEventListener('keydown', onKey) }
   }, [])
 
+  useEffect(() => { try { localStorage.setItem('carrito', JSON.stringify(carrito)) } catch { /* sin almacenamiento */ } }, [carrito])
+
+  useEffect(() => {
+    if (!aviso) return
+    const t = setTimeout(() => setAviso(''), 2500)
+    return () => clearTimeout(t)
+  }, [aviso])
+
   const limpiarHash = () => { if (window.location.hash) history.replaceState(null, '', window.location.pathname) }
   const cerrarAdmin = () => { setAdmin(false); limpiarHash() }
   const cerrarDetalle = () => { setDetalleId(null); if (hashProducto()) limpiarHash() }
+
+  // Carrito: solo guarda id y cantidad; los datos se toman del catálogo actual
+  const lineas = useMemo(() => {
+    if (!productos) return []
+    return carrito
+      .map(({ id, cant }) => ({ p: productos.find((x) => x.id === id), cant }))
+      .filter(({ p }) => p && p.disponible && puedeComprar(p))
+      .map(({ p, cant }) => ({ p, cant: Math.min(cant, maxCantidad(p)) }))
+  }, [carrito, productos])
+  const enCarrito = lineas.reduce((s, l) => s + l.cant, 0)
+
+  const agregar = (p) => {
+    setCarrito((c) => {
+      const ya = c.find((x) => x.id === p.id)
+      if (ya) return c.map((x) => (x.id === p.id ? { ...x, cant: Math.min(x.cant + 1, maxCantidad(p)) } : x))
+      return [...c, { id: p.id, cant: 1 }]
+    })
+    setAviso(`"${p.nombre}" se agregó al carrito`)
+  }
+  const cambiarCantidad = (id, cant) => setCarrito((c) => c.map((x) => (x.id === id ? { ...x, cant: Math.max(1, cant) } : x)))
+  const quitar = (id) => setCarrito((c) => c.filter((x) => x.id !== id))
 
   // Categorías para los filtros: las de la base de datos, o las que usan los productos
   const listaCats = useMemo(() => {
@@ -73,17 +121,30 @@ export default function Tienda() {
     if (productos && cat !== 'todos' && !listaCats.some((c) => c.nombre === cat)) setCat('todos')
   }, [productos, listaCats, cat])
 
+  const publicos = useMemo(() => (productos || []).filter((p) => p.disponible), [productos])
+  const destacados = useMemo(() => publicos.filter((p) => p.destacado && puedeComprar(p)), [publicos])
+
   const visibles = useMemo(() => {
     const t = q.trim().toLowerCase()
-    return (productos || []).filter((p) =>
-      p.disponible &&
-      (cat === 'todos' || p.categoria === cat) &&
-      (rar === 'todas' || p.rareza === rar) &&
-      (!t || [p.nombre, p.heroe, p.descripcion].some((s) => (s || '').toLowerCase().includes(t)))
-    )
-  }, [productos, cat, rar, q])
+    const min = pMin === '' ? -Infinity : Number(pMin)
+    const max = pMax === '' ? Infinity : Number(pMax)
+    return publicos
+      .filter((p) =>
+        (cat === 'todos' || p.categoria === cat) &&
+        (rar === 'todas' || p.rareza === rar) &&
+        (atr === 'todos' || p.atributo === atr) &&
+        (p.precio == null || (p.precio >= min && p.precio <= max)) &&
+        (!t || [p.nombre, p.heroe, p.descripcion].some((s) => (s || '').toLowerCase().includes(t)))
+      )
+      // Los vendidos/agotados van al final
+      .sort((a, b) => (puedeComprar(b) - puedeComprar(a)) || ORDENES[orden].fn(a, b))
+  }, [publicos, cat, rar, atr, pMin, pMax, q, orden])
+
+  const hayFiltros = cat !== 'todos' || rar !== 'todas' || atr !== 'todos' || pMin !== '' || pMax !== '' || q !== ''
+  const limpiarFiltros = () => { setCat('todos'); setRar('todas'); setAtr('todos'); setPMin(''); setPMax(''); setQ('') }
 
   const detalle = productos?.find((p) => p.id === detalleId)
+  const video = idYoutube(detalle?.video_url)
 
   return (
     <div className="min-h-screen flex flex-col overflow-x-hidden">
@@ -105,6 +166,7 @@ export default function Tienda() {
             </span>
           </a>
           <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+            <a href="#como-comprar" className="hidden lg:inline text-sm text-brand-text/80 hover:text-brand-gold font-medium px-2">¿Cómo comprar?</a>
             {DISCORD_URL && (
               <a href={DISCORD_URL} target="_blank" rel="noopener noreferrer"
                  className="hidden sm:inline-flex items-center gap-2 bg-[#5865F2] hover:bg-[#4752c4] text-white px-4 py-2 rounded-lg text-sm font-semibold transition">
@@ -112,12 +174,20 @@ export default function Tienda() {
               </a>
             )}
             {sesion && (
-              <button onClick={() => setAdmin(true)} aria-label="Gestionar items"
+              <button onClick={() => setAdmin(true)} aria-label="Gestionar tienda"
                       className="bg-brand-panel2 text-brand-gold hover:bg-brand-borde w-10 h-10 md:w-auto md:h-auto md:px-3 md:py-2 rounded-lg text-xs font-semibold border border-brand-borde transition flex items-center justify-center gap-1.5">
                 <Icono n="sliders" />
-                <span className="hidden md:inline">Gestionar items</span>
+                <span className="hidden md:inline">Gestionar tienda</span>
               </button>
             )}
+            <button onClick={() => setVerCarrito(true)} aria-label={`Abrir carrito (${enCarrito} items)`}
+                    className="relative bg-brand-red hover:bg-brand-redDark text-white w-10 h-10 sm:w-auto sm:h-auto sm:px-4 sm:py-2 rounded-lg text-sm font-semibold transition flex items-center justify-center gap-2">
+              <Icono n="cart" className="w-5 h-5 sm:w-4 sm:h-4" />
+              <span className="hidden sm:inline">Carrito</span>
+              {enCarrito > 0 && (
+                <span className="absolute -top-2 -right-2 min-w-5 h-5 px-1 rounded-full bg-brand-gold text-brand-bg text-[11px] font-black grid place-items-center">{enCarrito}</span>
+              )}
+            </button>
           </div>
         </div>
       </nav>
@@ -151,26 +221,51 @@ export default function Tienda() {
         </div>
       </header>
 
+      {/* Destacados */}
+      {destacados.length > 0 && (
+        <section className="max-w-7xl mx-auto w-full px-3 sm:px-6 lg:px-8 pt-8 sm:pt-10">
+          <h2 className="font-serif text-xl sm:text-2xl font-bold text-brand-gold flex items-center gap-2 mb-4">
+            <Icono n="fire" className="w-5 h-5 text-brand-red" /> Destacados
+          </h2>
+          <div className="flex gap-4 overflow-x-auto snap-x snap-mandatory pb-3 -mx-3 px-3 sm:mx-0 sm:px-0 [scrollbar-width:thin]">
+            {destacados.map((p) => (
+              <button key={p.id} onClick={() => setDetalleId(p.id)} style={{ '--rareza': colorRareza(p.rareza) }}
+                      className="product-card snap-start shrink-0 w-64 sm:w-72 text-left bg-brand-panel border border-brand-borde rounded-xl overflow-hidden">
+                <div className="relative">
+                  <Carrusel fotos={p.fotos.slice(0, 1)} alt={p.nombre} className="aspect-video" />
+                  <span className="absolute top-2 right-2"><Etiqueta e={p.etiqueta} /></span>
+                  <span className="absolute bottom-0 inset-x-0 h-1" style={{ background: colorRareza(p.rareza) }} />
+                </div>
+                <div className="p-3">
+                  <p className="font-serif font-bold truncate">{p.nombre}</p>
+                  <div className="flex items-center justify-between gap-2 mt-1">
+                    <Heroe p={p} />
+                    <Precio p={p} />
+                  </div>
+                </div>
+              </button>
+            ))}
+          </div>
+        </section>
+      )}
+
       {/* Catálogo */}
       <main id="catalogo" className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-8 sm:py-10 flex-grow w-full scroll-mt-16 sm:scroll-mt-20">
         <div className="flex flex-col gap-3 mb-6 sm:mb-8 pb-4 border-b border-brand-borde">
           <div className="flex flex-col md:flex-row justify-between md:items-center gap-3">
             {/* Filtros por categoría: fila deslizable en celular */}
-            <div className="flex gap-2 overflow-x-auto md:flex-wrap pb-1 -mx-3 px-3 md:mx-0 md:px-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            <div className={filaScroll}>
               {[{ nombre: 'todos', etiqueta: 'Todos' }, ...listaCats.map((c) => ({ nombre: c.nombre, etiqueta: `${c.emoji ? c.emoji + ' ' : ''}${c.nombre}` }))].map((c) => (
-                <button key={c.nombre} onClick={() => setCat(c.nombre)}
-                        className={`shrink-0 whitespace-nowrap px-4 py-2 rounded-lg text-xs sm:text-sm font-semibold transition ${cat === c.nombre ? 'bg-brand-red text-white shadow-[0_0_14px_rgba(194,60,42,.45)]' : 'bg-brand-panel text-brand-text/80 hover:bg-brand-panel2 border border-brand-borde'}`}>
-                  {c.etiqueta}
-                </button>
+                <button key={c.nombre} onClick={() => setCat(c.nombre)} className={chip(cat === c.nombre)}>{c.etiqueta}</button>
               ))}
             </div>
             <label className="relative w-full md:w-72 shrink-0">
               <span className="sr-only">Buscar item o héroe</span>
-              <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar item o héroe…"
-                     className="w-full bg-brand-panel border border-brand-borde text-base md:text-sm rounded-lg pl-9 pr-4 py-2 text-brand-text placeholder:text-brand-muted focus:outline-none focus:border-brand-gold" />
+              <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar item o héroe…" className={`${campo} w-full pl-9`} />
               <Icono n="search" className="w-3.5 h-3.5 absolute left-3.5 top-3.5 md:top-3 text-brand-muted" />
             </label>
           </div>
+
           {/* Filtro por rareza */}
           <div className="flex gap-1.5 overflow-x-auto -mx-3 px-3 md:mx-0 md:px-0 md:flex-wrap [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             {[{ nombre: 'todas', color: '#E6E1D6' }, ...RAREZAS].map((r) => {
@@ -184,6 +279,38 @@ export default function Tienda() {
               )
             })}
           </div>
+
+          {/* Atributo del héroe, rango de precio y orden */}
+          <div className="flex flex-col lg:flex-row lg:items-center gap-3 lg:justify-between">
+            <div className="flex gap-1.5 overflow-x-auto -mx-3 px-3 md:mx-0 md:px-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+              {[{ nombre: 'todos', color: '#E6E1D6', icono: '' }, ...ATRIBUTOS].map((a) => {
+                const activo = atr === a.nombre
+                return (
+                  <button key={a.nombre} onClick={() => setAtr(a.nombre)} aria-pressed={activo}
+                          className="shrink-0 whitespace-nowrap px-3 py-1 rounded-full text-xs font-semibold transition border"
+                          style={{ color: a.color, borderColor: activo ? a.color : `${a.color}40`, background: activo ? `${a.color}26` : 'transparent' }}>
+                    {a.nombre === 'todos' ? 'Todos los atributos' : `${a.icono} ${a.nombre}`}
+                  </button>
+                )
+              })}
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs text-brand-muted">S/</span>
+              <input type="number" min="0" inputMode="decimal" value={pMin} onChange={(e) => setPMin(e.target.value)} placeholder="Mín" aria-label="Precio mínimo" className={`${campo} w-20`} />
+              <span className="text-brand-muted">–</span>
+              <input type="number" min="0" inputMode="decimal" value={pMax} onChange={(e) => setPMax(e.target.value)} placeholder="Máx" aria-label="Precio máximo" className={`${campo} w-20`} />
+              <select value={orden} onChange={(e) => setOrden(e.target.value)} aria-label="Ordenar" className={`${campo} flex-1 min-w-[11rem]`}>
+                {Object.entries(ORDENES).map(([k, o]) => <option key={k} value={k}>{o.etiqueta}</option>)}
+              </select>
+            </div>
+          </div>
+
+          {productos && (
+            <div className="flex items-center justify-between text-xs text-brand-muted">
+              <span>{visibles.length} item(s)</span>
+              {hayFiltros && <button onClick={limpiarFiltros} className="text-brand-gold underline">Limpiar filtros</button>}
+            </div>
+          )}
         </div>
 
         {error && <p className="text-center py-16 text-red-400">{error}</p>}
@@ -193,83 +320,94 @@ export default function Tienda() {
           <div className="text-center py-16">
             <div className="w-16 h-16 bg-brand-panel2 text-brand-gold rounded-full flex items-center justify-center mx-auto mb-3 border border-brand-borde"><Icono n="sword" className="w-7 h-7" /></div>
             <h3 className="font-serif text-2xl text-brand-gold font-bold">No hay items para mostrar</h3>
-            <p className="text-sm text-brand-muted mt-1">Prueba con otra categoría, rareza o búsqueda.</p>
+            <p className="text-sm text-brand-muted mt-1">Prueba con otros filtros o pídenos el item por WhatsApp.</p>
           </div>
         )}
 
         {/* 1 columna en celulares pequeños, 2 desde 500px, 3 en laptop, 4 en pantalla grande */}
         <div className="grid grid-cols-1 min-[500px]:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6">
-          {visibles.map((p) => (
-            <article key={p.id} style={{ '--rareza': colorRareza(p.rareza) }}
-                     className="product-card bg-brand-panel rounded-xl overflow-hidden border border-brand-borde flex flex-col">
-              <div className="relative">
-                <Carrusel fotos={p.fotos} alt={p.nombre} className="aspect-video" />
-                <span className="absolute top-2.5 left-2.5 bg-black/70 text-brand-text text-[10px] sm:text-[11px] font-semibold px-2.5 py-1 rounded uppercase tracking-wider pointer-events-none">{p.categoria}</span>
-                <span className="absolute bottom-0 inset-x-0 h-1 pointer-events-none" style={{ background: colorRareza(p.rareza) }} />
-              </div>
-              <div className="p-4 sm:p-5 flex-grow flex flex-col justify-between">
-                <div>
-                  <div className="flex flex-wrap items-center gap-2 mb-2">
-                    <Rareza r={p.rareza} />
-                    {p.heroe && <span className="text-[11px] text-brand-muted font-medium">{p.heroe}</span>}
-                  </div>
-                  <h3 className="font-serif text-lg font-bold text-brand-text mb-1 break-words">
-                    <button onClick={() => setDetalleId(p.id)} className="text-left hover:text-brand-gold">{p.nombre}</button>
-                  </h3>
-                  {p.descripcion && <p className="text-xs text-brand-muted line-clamp-2 mb-3">{p.descripcion}</p>}
-                </div>
-                <div>
-                  {p.precio != null && (
-                    <div className="flex items-center justify-between mb-3 sm:mb-4">
-                      <span className="text-xs text-brand-muted font-medium">Precio</span>
-                      <span className="font-serif text-xl sm:text-2xl font-bold text-brand-gold">{soles(p.precio)}</span>
-                    </div>
-                  )}
-                  <div className="grid grid-cols-2 gap-2">
-                    <button onClick={() => setDetalleId(p.id)} className="border border-brand-borde text-brand-text hover:bg-brand-panel2 py-2.5 px-2 rounded-lg text-xs font-bold transition">Ver detalle</button>
-                    <a href={enlaceWhatsApp(p)} target="_blank" rel="noopener noreferrer" aria-label={`Comprar ${p.nombre} por WhatsApp`}
-                       className="bg-brand-red hover:bg-brand-redDark text-white py-2.5 px-2 rounded-lg text-xs font-bold transition flex items-center justify-center gap-1.5">
-                      <Icono n="chat" /> Comprar
-                    </a>
-                  </div>
-                </div>
-              </div>
-            </article>
-          ))}
+          {visibles.map((p) => <Tarjeta key={p.id} p={p} onVer={setDetalleId} onAgregar={agregar} />)}
         </div>
       </main>
+
+      <ComoComprar />
+      <Testimonios lista={testimonios.filter((t) => t.visible !== false)} />
 
       {/* Detalle */}
       {detalle && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center sm:p-4" onClick={cerrarDetalle}>
           <div role="dialog" aria-modal="true" aria-label={detalle.nombre} onClick={(e) => e.stopPropagation()}
                style={{ borderColor: colorRareza(detalle.rareza) }}
-               className="bg-brand-panel rounded-t-2xl sm:rounded-2xl shadow-2xl max-w-lg w-full max-h-[92dvh] overflow-y-auto relative border-t-4 sm:border">
+               className="bg-brand-panel rounded-t-2xl sm:rounded-2xl shadow-2xl max-w-xl w-full max-h-[92dvh] overflow-y-auto relative border-t-4 sm:border">
             <button onClick={cerrarDetalle} aria-label="Cerrar"
                     className="absolute top-3 right-3 z-10 bg-black/60 hover:bg-black/80 text-white w-10 h-10 rounded-full flex items-center justify-center">
               <Icono n="x" className="w-5 h-5" />
             </button>
-            <Carrusel fotos={detalle.fotos} alt={detalle.nombre} className="aspect-video" />
+            <div className="relative">
+              <Carrusel fotos={detalle.fotos} alt={detalle.nombre} className="aspect-video" />
+              <Agotado p={detalle} />
+            </div>
             <div className="p-5 sm:p-6">
               <div className="flex flex-wrap items-center gap-2 mb-2">
                 <Rareza r={detalle.rareza} />
+                <Etiqueta e={detalle.etiqueta} />
                 <span className="text-xs font-semibold uppercase tracking-wider text-brand-muted">{detalle.categoria}</span>
               </div>
               <h3 className="font-serif text-2xl font-bold text-brand-gold mb-1 break-words">{detalle.nombre}</h3>
-              {detalle.heroe && <p className="text-sm text-brand-text/80 mb-3">Héroe: <strong>{detalle.heroe}</strong></p>}
+              {detalle.heroe && (
+                <p className="text-sm text-brand-text/80 mb-3">
+                  Héroe: <strong>{detalle.heroe}</strong>{detalle.atributo && <span className="text-brand-muted"> · {detalle.atributo}</span>}
+                </p>
+              )}
               {detalle.descripcion && <p className="text-sm text-brand-muted mb-4 leading-relaxed whitespace-pre-line">{detalle.descripcion}</p>}
-              {detalle.precio != null && (
-                <div className="bg-brand-panel2 border border-brand-borde p-4 rounded-xl mb-5 sm:mb-6">
-                  <span className="text-xs text-brand-muted block uppercase tracking-wider font-semibold">Precio</span>
-                  <span className="font-serif text-3xl font-bold text-brand-gold">{soles(detalle.precio)}</span>
+              {video && (
+                <div className="aspect-video mb-4 rounded-xl overflow-hidden border border-brand-borde bg-black">
+                  <iframe src={`https://www.youtube-nocookie.com/embed/${video}`} title={`Video de ${detalle.nombre}`} loading="lazy"
+                          allow="accelerometer; encrypted-media; gyroscope; picture-in-picture; fullscreen" allowFullScreen className="w-full h-full" />
                 </div>
               )}
-              <a href={enlaceWhatsApp(detalle)} target="_blank" rel="noopener noreferrer"
-                 className="w-full bg-[#128C7E] hover:bg-[#0f7367] text-white py-3 rounded-xl text-sm font-bold shadow-lg transition flex items-center justify-center gap-2">
-                <Icono n="chat" className="w-5 h-5" /> Comprar por WhatsApp
-              </a>
+              {detalle.precio != null && (
+                <div className="bg-brand-panel2 border border-brand-borde p-4 rounded-xl mb-5 sm:mb-6 flex items-end justify-between gap-3">
+                  <span className="text-xs text-brand-muted uppercase tracking-wider font-semibold">
+                    Precio
+                    {descuento(detalle) > 0 && <span className="block mt-1 text-brand-red font-black text-sm normal-case">Ahorras {descuento(detalle)}%</span>}
+                    {detalle.stock != null && puedeComprar(detalle) && <span className="block mt-1 text-amber-400 normal-case">Quedan {detalle.stock}</span>}
+                  </span>
+                  <Precio p={detalle} grande />
+                </div>
+              )}
+              {puedeComprar(detalle) ? (
+                <div className="grid sm:grid-cols-2 gap-2">
+                  <button onClick={() => { agregar(detalle); cerrarDetalle() }}
+                          className="bg-brand-red hover:bg-brand-redDark text-white py-3 rounded-xl text-sm font-bold transition flex items-center justify-center gap-2">
+                    <Icono n="cart" className="w-5 h-5" /> Agregar al carrito
+                  </button>
+                  <a href={enlaceWhatsApp(detalle)} target="_blank" rel="noopener noreferrer"
+                     className="bg-[#128C7E] hover:bg-[#0f7367] text-white py-3 rounded-xl text-sm font-bold transition flex items-center justify-center gap-2">
+                    <Icono n="chat" className="w-5 h-5" /> Comprar ahora
+                  </a>
+                </div>
+              ) : (
+                <a href={enlaceWhatsApp({ nombre: `${detalle.nombre} (¿lo pueden conseguir?)`, heroe: detalle.heroe })} target="_blank" rel="noopener noreferrer"
+                   className="w-full border border-brand-gold/60 text-brand-gold hover:bg-brand-gold/10 py-3 rounded-xl text-sm font-bold transition flex items-center justify-center gap-2">
+                  <Icono n="chat" className="w-5 h-5" /> Preguntar si lo pueden conseguir
+                </a>
+              )}
             </div>
           </div>
+        </div>
+      )}
+
+      {verCarrito && (
+        <Carrito lineas={lineas} onCantidad={cambiarCantidad} onQuitar={quitar}
+                 onVaciar={() => setCarrito([])} onCerrar={() => setVerCarrito(false)} />
+      )}
+
+      {/* Aviso al agregar al carrito */}
+      {aviso && (
+        <div role="status" className="fixed bottom-4 left-1/2 -translate-x-1/2 z-[60] bg-brand-panel2 border border-brand-gold/50 text-sm text-brand-text px-4 py-3 rounded-xl shadow-2xl flex items-center gap-3 max-w-[calc(100%-2rem)]">
+          <span className="truncate">{aviso}</span>
+          <button onClick={() => { setAviso(''); setVerCarrito(true) }} className="text-brand-gold font-bold whitespace-nowrap">Ver carrito</button>
         </div>
       )}
 
@@ -277,12 +415,13 @@ export default function Tienda() {
       {admin && <AdminModal sesion={sesion} productos={productos || []} categorias={categorias} onCambio={cargar} onCerrar={cerrarAdmin} />}
 
       {/* Footer */}
-      <footer className="bg-brand-panel border-t border-brand-borde py-8 px-4 mt-12">
-        <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4 text-center md:text-left">
+      <footer className="bg-brand-panel border-t border-brand-borde py-8 px-4">
+        <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-5 text-center md:text-left">
           <div>
             <span className="font-serif text-xl font-bold texto-oro">{TIENDA}</span>
             <p className="text-xs text-brand-muted mt-0.5 max-w-md">Tienda independiente, sin relación con Valve. Dota 2 es marca registrada de Valve Corporation.</p>
           </div>
+          <div className="flex flex-wrap justify-center gap-1.5"><MetodosPago /></div>
           <div className="flex items-center gap-4">
             <span className="text-xs text-brand-muted">© 2026 {TIENDA}</span>
             <button onClick={() => setAdmin(true)} aria-label="Acceso administrador" className="text-brand-borde hover:text-brand-gold p-2"><Icono n="lock" className="w-3.5 h-3.5" /></button>
