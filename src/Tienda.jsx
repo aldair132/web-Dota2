@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { supabase, configurado, DISCORD_URL } from './supabase.js'
+import { supabase, configurado } from './supabase.js'
 import { TIENDA, enlaceWhatsApp, RAREZAS, ATRIBUTOS, colorRareza, puedeComprar, maxCantidad, idYoutube, DEMO } from './datos.js'
 import Carrusel from './Carrusel.jsx'
 import Tarjeta, { Rareza, Heroe, Etiqueta, Precio, Agotado, descuento } from './Tarjeta.jsx'
 import Carrito from './Carrito.jsx'
-import { ComoComprar, Testimonios, MetodosPago } from './Secciones.jsx'
+import { ComoComprar, Testimonios } from './Secciones.jsx'
+import Encabezado from './Encabezado.jsx'
+import Pie from './Pie.jsx'
 import AdminModal from './Admin.jsx'
 import Icono from './Icons.jsx'
 
@@ -143,6 +145,15 @@ export default function Tienda() {
   const hayFiltros = cat !== 'todos' || rar !== 'todas' || atr !== 'todos' || pMin !== '' || pMax !== '' || q !== ''
   const limpiarFiltros = () => { setCat('todos'); setRar('todas'); setAtr('todos'); setPMin(''); setPMax(''); setQ('') }
 
+  const enlaces = [
+    { href: '#inicio', texto: 'Inicio' },
+    { href: '#catalogo', texto: 'Catálogo' },
+    ...(destacados.length ? [{ href: '#destacados', texto: 'Destacados' }] : []),
+    { href: '#como-comprar', texto: 'Cómo comprar' },
+    { href: '#preguntas', texto: 'Preguntas' },
+    { href: '#contacto', texto: 'Contacto' },
+  ]
+
   const detalle = productos?.find((p) => p.id === detalleId)
   const video = idYoutube(detalle?.video_url)
 
@@ -153,47 +164,10 @@ export default function Tienda() {
         ⚔️ Items, sets, arcanas e inmortales de Dota 2 · Entrega por intercambio de Steam ⚔️
       </div>
 
-      {/* Navbar */}
-      <nav className="sticky top-0 z-40 bg-brand-bg/85 backdrop-blur-md border-b border-brand-borde">
-        <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 flex justify-between items-center gap-2 h-16 sm:h-20">
-          <a href="#catalogo" className="flex items-center gap-2 sm:gap-3 min-w-0">
-            <span className="w-10 h-10 sm:w-12 sm:h-12 shrink-0 rotate-45 border-2 border-brand-gold bg-gradient-to-br from-brand-red to-brand-redDark flex items-center justify-center shadow-[0_0_18px_rgba(194,60,42,.5)]">
-              <Icono n="sword" className="w-5 h-5 sm:w-6 sm:h-6 -rotate-45 text-brand-gold" />
-            </span>
-            <span className="min-w-0 ml-1">
-              <span className="font-serif text-xl sm:text-3xl font-black tracking-wider texto-oro block leading-none truncate">{TIENDA}</span>
-              <span className="text-[9px] sm:text-[10px] uppercase tracking-[.3em] text-brand-muted font-medium block truncate">Dota 2 Marketplace</span>
-            </span>
-          </a>
-          <div className="flex items-center gap-2 sm:gap-3 shrink-0">
-            <a href="#como-comprar" className="hidden lg:inline text-sm text-brand-text/80 hover:text-brand-gold font-medium px-2">¿Cómo comprar?</a>
-            {DISCORD_URL && (
-              <a href={DISCORD_URL} target="_blank" rel="noopener noreferrer"
-                 className="hidden sm:inline-flex items-center gap-2 bg-[#5865F2] hover:bg-[#4752c4] text-white px-4 py-2 rounded-lg text-sm font-semibold transition">
-                <Icono n="chat" /> Discord
-              </a>
-            )}
-            {sesion && (
-              <button onClick={() => setAdmin(true)} aria-label="Gestionar tienda"
-                      className="bg-brand-panel2 text-brand-gold hover:bg-brand-borde w-10 h-10 md:w-auto md:h-auto md:px-3 md:py-2 rounded-lg text-xs font-semibold border border-brand-borde transition flex items-center justify-center gap-1.5">
-                <Icono n="sliders" />
-                <span className="hidden md:inline">Gestionar tienda</span>
-              </button>
-            )}
-            <button onClick={() => setVerCarrito(true)} aria-label={`Abrir carrito (${enCarrito} items)`}
-                    className="relative bg-brand-red hover:bg-brand-redDark text-white w-10 h-10 sm:w-auto sm:h-auto sm:px-4 sm:py-2 rounded-lg text-sm font-semibold transition flex items-center justify-center gap-2">
-              <Icono n="cart" className="w-5 h-5 sm:w-4 sm:h-4" />
-              <span className="hidden sm:inline">Carrito</span>
-              {enCarrito > 0 && (
-                <span className="absolute -top-2 -right-2 min-w-5 h-5 px-1 rounded-full bg-brand-gold text-brand-bg text-[11px] font-black grid place-items-center">{enCarrito}</span>
-              )}
-            </button>
-          </div>
-        </div>
-      </nav>
+      <Encabezado enlaces={enlaces} enCarrito={enCarrito} sesion={sesion} onCarrito={() => setVerCarrito(true)} onAdmin={() => setAdmin(true)} />
 
       {/* Hero */}
-      <header className="hero-bg py-12 sm:py-20 px-4 border-b border-brand-borde">
+      <section id="inicio" className="hero-bg scroll-mt-24 py-12 sm:py-20 px-4 border-b border-brand-borde">
         <div className="max-w-3xl w-full mx-auto flex flex-col items-center text-center">
           <span className="inline-block px-3.5 py-1 bg-brand-red/15 rounded text-[10px] sm:text-xs uppercase tracking-[.25em] text-brand-gold font-semibold mb-5 border border-brand-red/50">
             Tienda de cosméticos de Dota 2
@@ -219,11 +193,11 @@ export default function Tienda() {
             <li className="flex flex-col items-center gap-1.5"><Icono n="chat" className="w-5 h-5 text-brand-gold" />Atención por WhatsApp</li>
           </ul>
         </div>
-      </header>
+      </section>
 
       {/* Destacados */}
       {destacados.length > 0 && (
-        <section className="max-w-7xl mx-auto w-full px-3 sm:px-6 lg:px-8 pt-8 sm:pt-10">
+        <section id="destacados" className="max-w-7xl mx-auto w-full px-3 sm:px-6 lg:px-8 pt-8 sm:pt-10 scroll-mt-24">
           <h2 className="font-serif text-xl sm:text-2xl font-bold text-brand-gold flex items-center gap-2 mb-4">
             <Icono n="fire" className="w-5 h-5 text-brand-red" /> Destacados
           </h2>
@@ -250,7 +224,7 @@ export default function Tienda() {
       )}
 
       {/* Catálogo */}
-      <main id="catalogo" className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-8 sm:py-10 flex-grow w-full scroll-mt-16 sm:scroll-mt-20">
+      <main id="catalogo" className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-8 sm:py-10 flex-grow w-full scroll-mt-20 sm:scroll-mt-24">
         <div className="flex flex-col gap-3 mb-6 sm:mb-8 pb-4 border-b border-brand-borde">
           <div className="flex flex-col md:flex-row justify-between md:items-center gap-3">
             {/* Filtros por categoría: fila deslizable en celular */}
@@ -414,20 +388,7 @@ export default function Tienda() {
       {/* Admin */}
       {admin && <AdminModal sesion={sesion} productos={productos || []} categorias={categorias} onCambio={cargar} onCerrar={cerrarAdmin} />}
 
-      {/* Footer */}
-      <footer className="bg-brand-panel border-t border-brand-borde py-8 px-4">
-        <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-5 text-center md:text-left">
-          <div>
-            <span className="font-serif text-xl font-bold texto-oro">{TIENDA}</span>
-            <p className="text-xs text-brand-muted mt-0.5 max-w-md">Tienda independiente, sin relación con Valve. Dota 2 es marca registrada de Valve Corporation.</p>
-          </div>
-          <div className="flex flex-wrap justify-center gap-1.5"><MetodosPago /></div>
-          <div className="flex items-center gap-4">
-            <span className="text-xs text-brand-muted">© 2026 {TIENDA}</span>
-            <button onClick={() => setAdmin(true)} aria-label="Acceso administrador" className="text-brand-borde hover:text-brand-gold p-2"><Icono n="lock" className="w-3.5 h-3.5" /></button>
-          </div>
-        </div>
-      </footer>
+      <Pie enlaces={enlaces} onAdmin={() => setAdmin(true)} />
     </div>
   )
 }

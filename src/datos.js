@@ -4,6 +4,8 @@ export const soles = (n) => `S/ ${Number(n).toFixed(2)}`
 
 export const WHATSAPP_NUMERO = '+51936848270' // ← cambia por tu número
 
+export const HORARIO = 'Lunes a domingo, 10:00 a. m. – 11:00 p. m.' // ← tu horario de atención
+
 // Rarezas de Dota 2 con su color característico
 export const RAREZAS = [
   { nombre: 'Común', color: '#B0C3D9' },

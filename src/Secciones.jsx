@@ -30,7 +30,7 @@ export function ComoComprar() {
           <MetodosPago />
         </div>
 
-        <div className="mt-12 max-w-3xl mx-auto">
+        <div id="preguntas" className="mt-12 max-w-3xl mx-auto scroll-mt-24">
           <h3 className="font-serif text-xl font-bold text-brand-gold text-center mb-4">Preguntas frecuentes</h3>
           <div className="space-y-2">
             {PREGUNTAS.map((f) => (
