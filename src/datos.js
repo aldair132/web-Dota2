@@ -14,7 +14,6 @@ export const RAREZAS = [
   { nombre: 'Mítica', color: '#8847FF' },
   { nombre: 'Legendaria', color: '#D32CE6' },
   { nombre: 'Inmortal', color: '#E4AE39' },
-  { nombre: 'Arcana', color: '#ADE55C' },
 ]
 export const colorRareza = (r) => RAREZAS.find((x) => x.nombre === r)?.color || '#8C95A3'
 
@@ -26,7 +25,7 @@ export const ATRIBUTOS = [
 ]
 export const colorAtributo = (a) => ATRIBUTOS.find((x) => x.nombre === a)?.color || '#8C95A3'
 
-// Etiquetas que se pueden poner a un item desde el admin
+// Etiquetas que se pueden poner a un set desde el admin
 export const ETIQUETAS = [
   { nombre: 'Oferta', color: '#C23C2A' },
   { nombre: 'Nuevo', color: '#2E9E6A' },
@@ -45,17 +44,17 @@ export const METODOS_PAGO = [
 ]
 
 export const PASOS_COMPRA = [
-  { titulo: 'Elige tus items', texto: 'Agrégalos al carrito y envíanos el pedido por WhatsApp con un solo clic.' },
+  { titulo: 'Elige tus sets', texto: 'Agrégalos al carrito y envíanos el pedido por WhatsApp con un solo clic.' },
   { titulo: 'Paga fácil', texto: 'Te confirmamos disponibilidad y pagas por Yape, Plin o transferencia.' },
-  { titulo: 'Recibe en Steam', texto: 'Te enviamos una solicitud de intercambio y el item llega a tu inventario.' },
+  { titulo: 'Recibe en Steam', texto: 'Te enviamos una solicitud de intercambio y el set llega a tu inventario.' },
 ]
 
 export const PREGUNTAS = [
   { p: '¿Cuánto demora la entrega?', r: 'Normalmente entre 5 y 30 minutos después de confirmar el pago, en horario de atención.' },
   { p: '¿Qué es el bloqueo de intercambio de Steam?', r: 'Steam puede retener por unos días los items recién intercambiados, y si tu cuenta no tiene Steam Guard activo hace tiempo el intercambio puede quedar en espera. Te avisamos antes de enviarlo.' },
-  { p: '¿Qué necesito para recibir el item?', r: 'Tu enlace de intercambio de Steam (Inventario → Ofertas de intercambio → ¿Quién puede enviarme ofertas?) y que tu inventario sea público.' },
-  { p: '¿Tienen garantía?', r: 'Sí. Si el intercambio no llega o hay algún problema, te devolvemos el dinero o te enviamos otro item del mismo valor.' },
-  { p: '¿Puedo pedir un item que no está en el catálogo?', r: 'Claro. Escríbenos por WhatsApp con el nombre del item y te lo cotizamos.' },
+  { p: '¿Qué necesito para recibir el set?', r: 'Tu enlace de intercambio de Steam (Inventario → Ofertas de intercambio → ¿Quién puede enviarme ofertas?) y que tu inventario sea público.' },
+  { p: '¿Tienen garantía?', r: 'Sí. Si el intercambio no llega o hay algún problema, te devolvemos el dinero o te enviamos otro set del mismo valor.' },
+  { p: '¿Puedo pedir un set que no está en el catálogo?', r: 'Claro. Escríbenos por WhatsApp con el nombre del set o del héroe y te lo cotizamos.' },
 ]
 
 // Se puede comprar si no está marcado como vendido y queda stock (stock vacío = sin límite)
@@ -63,7 +62,7 @@ export const puedeComprar = (p) => !p.vendido && (p.stock == null || p.stock > 0
 export const maxCantidad = (p) => (p.stock == null ? 10 : p.stock)
 
 export const enlaceWhatsApp = (p) => {
-  const lineas = [`Hola, me interesa este item de ${TIENDA}:`, `*${p.nombre}*`]
+  const lineas = [`Hola, me interesa este set de ${TIENDA}:`, `*${p.nombre}*`]
   if (p.heroe) lineas.push(`Héroe: ${p.heroe}`)
   if (p.rareza) lineas.push(`Rareza: ${p.rareza}`)
   if (p.precio != null) lineas.push(`Precio: ${soles(p.precio)}`)
@@ -89,24 +88,20 @@ export const enlaceCarrito = (lineas, total) => {
 export const idYoutube = (url = '') =>
   (url || '').match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?(?:.*&)?v=|shorts\/|embed\/))([\w-]{11})/)?.[1] || null
 
-// Items de ejemplo para ver la tienda antes de conectar Supabase
+// Sets de ejemplo para ver la tienda antes de conectar Supabase
 const item = (id, nombre, categoria, heroe, atributo, rareza, precio, descripcion, extra = {}) =>
   ({ id: `00000000-0000-0000-0000-00000000000${id}`, nombre, categoria, heroe, atributo, rareza, precio, descripcion, fotos: [], disponible: true, creado_en: `2026-10-0${id}`, ...extra })
 export const DEMO = {
-  categorias: [
-    { id: 'a', nombre: 'Arcanas', emoji: '🌟' }, { id: 'i', nombre: 'Inmortales', emoji: '🏆' },
-    { id: 's', nombre: 'Sets', emoji: '🛡️' }, { id: 'c', nombre: 'Couriers', emoji: '🐉' },
-  ],
   productos: [
-    item(1, 'Arcana de ejemplo', 'Arcanas', 'Juggernaut', 'Agilidad', 'Arcana', 120, 'Modelo, animaciones y efectos nuevos para tu héroe.', { precio_antes: 150, etiqueta: 'Oferta', destacado: true }),
-    item(2, 'Arma inmortal de ejemplo', 'Inmortales', 'Phantom Assassin', 'Agilidad', 'Inmortal', 35, 'Arma con efecto especial en golpes críticos.', { etiqueta: 'Más vendido', destacado: true }),
-    item(3, 'Set legendario de ejemplo', 'Sets', 'Pudge', 'Fuerza', 'Legendaria', 18.5, 'Set completo de 5 piezas.', { etiqueta: 'Nuevo' }),
-    item(4, 'Set mítico de ejemplo', 'Sets', 'Crystal Maiden', 'Inteligencia', 'Mítica', 9.9, 'Set de 4 piezas con estilo alternativo.', { stock: 1, etiqueta: 'Últimas unidades' }),
-    item(5, 'Courier de ejemplo', 'Couriers', '', null, 'Rara', 12, 'Courier con efecto de partículas.', { vendido: true }),
-    item(6, 'Hombreras inmortales de ejemplo', 'Inmortales', 'Lina', 'Inteligencia', 'Inmortal', 28, 'Pieza inmortal con estilos desbloqueables.', { destacado: true }),
+    item(1, 'Set inmortal de ejemplo', 'Sets', 'Juggernaut', 'Agilidad', 'Inmortal', 120, 'Set completo con estilos desbloqueables y efectos.', { precio_antes: 150, etiqueta: 'Oferta', destacado: true }),
+    item(2, 'Set legendario de ejemplo', 'Sets', 'Phantom Assassin', 'Agilidad', 'Legendaria', 35, 'Set de 5 piezas con efectos de partículas.', { etiqueta: 'Más vendido', destacado: true }),
+    item(3, 'Set mítico de Pudge', 'Sets', 'Pudge', 'Fuerza', 'Mítica', 18.5, 'Set completo de 5 piezas.', { etiqueta: 'Nuevo' }),
+    item(4, 'Set mítico de Crystal Maiden', 'Sets', 'Crystal Maiden', 'Inteligencia', 'Mítica', 9.9, 'Set de 4 piezas con estilo alternativo.', { stock: 1, etiqueta: 'Últimas unidades' }),
+    item(5, 'Set raro de Axe', 'Sets', 'Axe', 'Fuerza', 'Rara', 12, 'Set de 5 piezas.', { vendido: true }),
+    item(6, 'Set legendario de Lina', 'Sets', 'Lina', 'Inteligencia', 'Legendaria', 28, 'Set completo con estilos desbloqueables.', { destacado: true }),
   ],
   testimonios: [
-    { id: 't1', nombre: 'Cliente de ejemplo', texto: 'Me llegó la arcana en 10 minutos. Todo muy confiable.', foto: null },
+    { id: 't1', nombre: 'Cliente de ejemplo', texto: 'Me llegó el set en 10 minutos. Todo muy confiable.', foto: null },
     { id: 't2', nombre: 'Otro cliente', texto: 'Buenos precios y me explicaron todo sobre el intercambio.', foto: null },
   ],
 }

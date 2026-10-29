@@ -1,12 +1,12 @@
 # Ancient Shop (Dota 2)
 
-Catálogo de items de Dota 2 con React + Vite + Supabase. Misma base que Alyz Shop.
+Tienda de **sets** de Dota 2 con React + Vite + Supabase. Misma base que Alyz Shop.
 
-**Tienda:** filtros por categoría, rareza, atributo y rango de precio · orden por precio, novedad o descuento · ofertas con precio tachado y etiquetas (Oferta, Nuevo, Más vendido, Últimas unidades) · sección de destacados · carrito que envía un solo pedido por WhatsApp · video de YouTube en el detalle · items vendidos/agotados · "¿Cómo comprar?", preguntas frecuentes, testimonios y métodos de pago.
+**Tienda:** filtros por héroe, rareza, atributo y rango de precio · orden por precio, novedad o descuento · ofertas con precio tachado y etiquetas (Oferta, Nuevo, Más vendido, Últimas unidades) · sección de destacados · carrito que envía un solo pedido por WhatsApp · video de YouTube en el detalle · items vendidos/agotados · "¿Cómo comprar?", preguntas frecuentes, testimonios y métodos de pago.
 
-**Panel admin** (`/#/admin` o el candado del pie de página): items (con héroe autocompletado, atributo, rareza, etiqueta, oferta, stock, video, destacado, vendido), categorías, testimonios y registro de ventas con total del mes.
+**Panel admin** (`/#/admin` o el candado del pie de página): sets (con héroe autocompletado, atributo, rareza, etiqueta, oferta, stock, video, destacado, vendido), testimonios y registro de ventas con total del mes.
 
-Sin `.env` arranca en **modo demo** con items de ejemplo.
+Sin `.env` arranca en **modo demo** con sets de ejemplo.
 
 ## Personalizar
 - Número de WhatsApp, métodos de pago, pasos de compra y preguntas frecuentes: `src/datos.js`

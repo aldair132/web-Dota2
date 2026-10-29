@@ -3,25 +3,23 @@ import { supabase } from './supabase.js'
 import { soles, RAREZAS, ATRIBUTOS, ETIQUETAS, colorRareza, colorEtiqueta, idYoutube, puedeComprar } from './datos.js'
 import { HEROES } from './heroes.js'
 import { campo, etiqueta, subirImagen, borrarImagenes } from './adminUi.js'
-import Categorias from './Categorias.jsx'
 import AdminTestimonios from './AdminTestimonios.jsx'
 import Pedidos from './Pedidos.jsx'
 import Icono from './Icons.jsx'
 
 const VACIO = {
-  nombre: '', categoria: '', heroe: '', atributo: '', rareza: 'Inmortal', precio: '', precio_antes: '', etiqueta: '',
+  nombre: '', heroe: '', atributo: '', rareza: 'Mítica', precio: '', precio_antes: '', etiqueta: '',
   descripcion: '', video_url: '', stock: '', destacado: false, vendido: false, disponible: true, fotos: [],
 }
 const POR_PAGINA = 10
 const PESTANAS = [
-  { id: 'lista', nombre: 'Items' },
-  { id: 'cats', nombre: 'Categorías' },
+  { id: 'lista', nombre: 'Sets' },
   { id: 'testi', nombre: 'Testimonios' },
   { id: 'pedidos', nombre: 'Ventas' },
 ]
 const numOVacio = (v) => (v === '' || v == null ? null : Number(v))
 
-export default function AdminModal({ sesion, productos, categorias, onCambio, onCerrar }) {
+export default function AdminModal({ sesion, productos, onCambio, onCerrar }) {
   return (
     <div className="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-2 sm:p-4" onClick={onCerrar}>
       <div role="dialog" aria-modal="true" aria-label="Panel de administración" onClick={(e) => e.stopPropagation()}
@@ -29,7 +27,7 @@ export default function AdminModal({ sesion, productos, categorias, onCambio, on
         <button onClick={onCerrar} aria-label="Cerrar" className="absolute top-3 right-3 z-10 text-brand-muted hover:text-brand-text w-9 h-9 rounded-full flex items-center justify-center hover:bg-brand-panel2">
           <Icono n="x" className="w-5 h-5" />
         </button>
-        {sesion ? <Panel productos={productos} categorias={categorias} onCambio={onCambio} /> : <Login />}
+        {sesion ? <Panel productos={productos} onCambio={onCambio} /> : <Login />}
       </div>
     </div>
   )
@@ -66,7 +64,7 @@ function Interruptor({ activo, onClick, etiqueta: texto }) {
   )
 }
 
-function Panel({ productos, categorias, onCambio }) {
+function Panel({ productos, onCambio }) {
   const [vista, setVista] = useState('lista') // 'lista' | 'form' | 'cats' | 'testi' | 'pedidos'
   const [form, setForm] = useState(VACIO)
   const [editId, setEditId] = useState(null)
@@ -74,38 +72,29 @@ function Panel({ productos, categorias, onCambio }) {
   const [guardando, setGuardando] = useState(false)
   const [msg, setMsg] = useState('')
   const [q, setQ] = useState('')
-  const [fCat, setFCat] = useState('todas')
   const [fEstado, setFEstado] = useState('todos')
   const [limite, setLimite] = useState(POR_PAGINA)
   const cuerpo = useRef(null)
 
-  // Si la tabla de categorías aún no existe, se usan las que ya tienen los productos
-  const opciones = useMemo(
-    () => categorias.length
-      ? categorias
-      : [...new Set(productos.map((p) => p.categoria))].map((nombre) => ({ id: nombre, nombre, emoji: '' })),
-    [categorias, productos]
-  )
 
   const previews = useMemo(() => nuevas.map((f) => URL.createObjectURL(f)), [nuevas])
   useEffect(() => () => previews.forEach(URL.revokeObjectURL), [previews])
   useEffect(() => { cuerpo.current?.scrollTo({ top: 0 }) }, [vista])
-  useEffect(() => { setLimite(POR_PAGINA) }, [q, fCat, fEstado])
+  useEffect(() => { setLimite(POR_PAGINA) }, [q, fEstado])
 
   const filtrados = useMemo(() => {
     const t = q.trim().toLowerCase()
     return productos.filter((p) => {
-      if (fCat !== 'todas' && p.categoria !== fCat) return false
       if (fEstado === 'visibles' && !p.disponible) return false
       if (fEstado === 'ocultos' && p.disponible) return false
       if (fEstado === 'destacados' && !p.destacado) return false
       if (fEstado === 'agotados' && puedeComprar(p)) return false
       return !t || p.nombre.toLowerCase().includes(t) || (p.heroe || '').toLowerCase().includes(t)
     })
-  }, [productos, q, fCat, fEstado])
+  }, [productos, q, fEstado])
 
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }))
-  const limpiar = () => { setForm({ ...VACIO, categoria: opciones[0]?.nombre || '' }); setEditId(null); setNuevas([]) }
+  const limpiar = () => { setForm(VACIO); setEditId(null); setNuevas([]) }
 
   const nuevo = () => { limpiar(); setMsg(''); setVista('form') }
   const volver = () => { limpiar(); setVista('lista') }
@@ -113,7 +102,7 @@ function Panel({ productos, categorias, onCambio }) {
   const editar = (p) => {
     setEditId(p.id)
     setForm({
-      nombre: p.nombre, categoria: p.categoria, heroe: p.heroe ?? '', atributo: p.atributo ?? '', rareza: p.rareza ?? '',
+      nombre: p.nombre, heroe: p.heroe ?? '', atributo: p.atributo ?? '', rareza: p.rareza ?? '',
       precio: p.precio ?? '', precio_antes: p.precio_antes ?? '', etiqueta: p.etiqueta ?? '', descripcion: p.descripcion ?? '',
       video_url: p.video_url ?? '', stock: p.stock ?? '', destacado: !!p.destacado, vendido: !!p.vendido, disponible: p.disponible, fotos: p.fotos,
     })
@@ -134,7 +123,7 @@ function Panel({ productos, categorias, onCambio }) {
       for (const f of nuevas) subidas.push(await subirImagen(f))
       const fila = {
         nombre: form.nombre,
-        categoria: form.categoria,
+        categoria: 'Sets',
         heroe: form.heroe.trim() || null,
         atributo: form.atributo || null,
         rareza: form.rareza || null,
@@ -157,7 +146,7 @@ function Panel({ productos, categorias, onCambio }) {
       // Borra del almacenamiento las fotos que se quitaron al editar
       await borrarImagenes(original.filter((u) => !form.fotos.includes(u)))
 
-      setMsg(editId ? 'Item actualizado.' : 'Item creado.')
+      setMsg(editId ? 'Set actualizado.' : 'Set creado.')
       limpiar()
       onCambio()
       if (!otro) setVista('lista')
@@ -179,7 +168,7 @@ function Panel({ productos, categorias, onCambio }) {
     if (!confirm(`¿Eliminar "${p.nombre}"? No se puede deshacer.`)) return
     await borrarImagenes(p.fotos)
     const { error } = await supabase.from('productos').delete().eq('id', p.id)
-    setMsg(error ? 'No se pudo eliminar: ' + error.message : 'Item eliminado.')
+    setMsg(error ? 'No se pudo eliminar: ' + error.message : 'Set eliminado.')
     if (editId === p.id) limpiar()
     onCambio()
   }
@@ -208,9 +197,7 @@ function Panel({ productos, categorias, onCambio }) {
       <div ref={cuerpo} className="flex-1 min-h-0 overflow-y-auto px-4 sm:px-6 pt-4">
         {msg && (vista === 'lista' || vista === 'form') && <p role="status" className="text-sm mb-3 bg-brand-red/15 text-brand-gold border border-brand-red/40 rounded-lg px-3 py-2">{msg}</p>}
 
-        {vista === 'cats' ? (
-          <Categorias categorias={categorias} productos={productos} onCambio={onCambio} onVolver={() => setVista('lista')} />
-        ) : vista === 'testi' ? (
+        {vista === 'testi' ? (
           <AdminTestimonios onCambio={onCambio} />
         ) : vista === 'pedidos' ? (
           <Pedidos productos={productos} onCambio={onCambio} />
@@ -218,14 +205,10 @@ function Panel({ productos, categorias, onCambio }) {
           <div className="pb-6">
             <div className="flex flex-col sm:flex-row gap-2 mb-3">
               <label className="relative flex-1">
-                <span className="sr-only">Buscar item</span>
+                <span className="sr-only">Buscar set</span>
                 <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar por nombre o héroe…" className={`${campo} pl-9`} />
                 <Icono n="search" className="w-3.5 h-3.5 absolute left-3 top-3 text-brand-muted" />
               </label>
-              <select value={fCat} onChange={(e) => setFCat(e.target.value)} aria-label="Filtrar por categoría" className={`${campo} sm:w-40`}>
-                <option value="todas">Todas</option>
-                {opciones.map((c) => <option key={c.id} value={c.nombre}>{c.emoji} {c.nombre}</option>)}
-              </select>
               <select value={fEstado} onChange={(e) => setFEstado(e.target.value)} aria-label="Filtrar por estado" className={`${campo} sm:w-40`}>
                 <option value="todos">Todos</option>
                 <option value="visibles">Visibles</option>
@@ -233,10 +216,10 @@ function Panel({ productos, categorias, onCambio }) {
                 <option value="destacados">Destacados</option>
                 <option value="agotados">Vendidos / agotados</option>
               </select>
-              <button onClick={nuevo} className="bg-brand-red hover:bg-brand-redDark text-white px-4 py-2 rounded-lg text-sm font-semibold transition whitespace-nowrap">+ Nuevo item</button>
+              <button onClick={nuevo} className="bg-brand-red hover:bg-brand-redDark text-white px-4 py-2 rounded-lg text-sm font-semibold transition whitespace-nowrap">+ Nuevo set</button>
             </div>
 
-            <p className="text-xs text-brand-muted mb-2">Mostrando {Math.min(limite, filtrados.length)} de {filtrados.length} item(s)</p>
+            <p className="text-xs text-brand-muted mb-2">Mostrando {Math.min(limite, filtrados.length)} de {filtrados.length} set(s)</p>
 
             <ul className="space-y-2">
               {filtrados.slice(0, limite).map((p) => (
@@ -249,7 +232,6 @@ function Panel({ productos, categorias, onCambio }) {
                       {p.destacado && <span title="Destacado" className="text-brand-gold mr-1">★</span>}{p.nombre}
                     </p>
                     <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-brand-muted">
-                      <span>{p.categoria}</span>
                       {p.heroe && <span>{p.heroe}</span>}
                       {p.rareza && <span style={{ color: colorRareza(p.rareza) }}>{p.rareza}</span>}
                       {p.precio != null && <span className="font-bold text-brand-gold">{soles(p.precio)}</span>}
@@ -272,7 +254,7 @@ function Panel({ productos, categorias, onCambio }) {
 
             {filtrados.length === 0 && (
               <p className="text-center text-sm text-brand-muted py-10">
-                {productos.length === 0 ? 'Aún no hay items. Pulsa "+ Nuevo item".' : 'Ningún item coincide con los filtros.'}
+                {productos.length === 0 ? 'Aún no hay sets. Pulsa "+ Nuevo set".' : 'Ningún set coincide con los filtros.'}
               </p>
             )}
 
@@ -284,19 +266,11 @@ function Panel({ productos, categorias, onCambio }) {
           <form onSubmit={guardar} className="max-w-2xl mx-auto space-y-4">
             <div className="flex items-center justify-between gap-3">
               <button type="button" onClick={volver} className="text-sm text-brand-gold underline">← Volver a la lista</button>
-              <h3 className="font-serif text-xl font-bold text-brand-gold">{editId ? 'Editar item' : 'Nuevo item'}</h3>
+              <h3 className="font-serif text-xl font-bold text-brand-gold">{editId ? 'Editar set' : 'Nuevo set'}</h3>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <label><span className={etiqueta}>Nombre</span><input required value={form.nombre} onChange={(e) => set('nombre', e.target.value)} placeholder="Ej: Set de la Tormenta Carmesí" className={campo} /></label>
-              <label><span className={etiqueta}>Categoría</span>
-                <select required value={form.categoria} onChange={(e) => set('categoria', e.target.value)} className={campo}>
-                  {!form.categoria && <option value="">Elige una categoría</option>}
-                  {form.categoria && !opciones.some((c) => c.nombre === form.categoria) && <option value={form.categoria}>{form.categoria}</option>}
-                  {opciones.map((c) => <option key={c.id} value={c.nombre}>{c.emoji} {c.nombre}</option>)}
-                </select>
-                <button type="button" onClick={() => setVista('cats')} className="text-[11px] text-brand-gold underline mt-1">Administrar categorías</button>
-              </label>
+              <label><span className={etiqueta}>Nombre del set</span><input required value={form.nombre} onChange={(e) => set('nombre', e.target.value)} placeholder="Ej: Set de la Tormenta Carmesí" className={campo} /></label>
               <label><span className={etiqueta}>Héroe</span>
                 <input list="lista-heroes" value={form.heroe} onChange={(e) => set('heroe', e.target.value)} placeholder="Escribe y elige (vacío si no aplica)" className={campo} />
                 <datalist id="lista-heroes">{HEROES.map((h) => <option key={h} value={h} />)}</datalist>
@@ -330,7 +304,7 @@ function Panel({ productos, categorias, onCambio }) {
               <p className="text-xs text-amber-400 -mt-2">El "precio antes" debe ser mayor que el precio para que se muestre como oferta.</p>
             )}
 
-            <label className="block"><span className={etiqueta}>Descripción</span><textarea rows="3" value={form.descripcion} onChange={(e) => set('descripcion', e.target.value)} placeholder="Piezas incluidas, estilos desbloqueables, efectos…" className={campo} /></label>
+            <label className="block"><span className={etiqueta}>Descripción</span><textarea rows="3" value={form.descripcion} onChange={(e) => set('descripcion', e.target.value)} placeholder="Piezas incluidas (cabeza, arma, hombros…), estilos y efectos" className={campo} /></label>
             <label className="block"><span className={etiqueta}>Video de YouTube (opcional)</span><input type="url" value={form.video_url} onChange={(e) => set('video_url', e.target.value)} placeholder="https://www.youtube.com/watch?v=..." className={campo} /></label>
 
             {form.fotos.length > 0 && (
@@ -375,7 +349,7 @@ function Panel({ productos, categorias, onCambio }) {
                 <button data-otro="si" disabled={guardando} className="px-4 py-2 text-xs font-semibold text-brand-gold border border-brand-gold/60 hover:bg-brand-gold/10 rounded-lg disabled:opacity-60">Guardar y crear otro</button>
               )}
               <button disabled={guardando} className="px-5 py-2 text-xs font-semibold text-white bg-brand-red hover:bg-brand-redDark rounded-lg shadow disabled:opacity-60">
-                {guardando ? 'Guardando…' : editId ? 'Actualizar item' : 'Guardar item'}
+                {guardando ? 'Guardando…' : editId ? 'Actualizar set' : 'Guardar set'}
               </button>
             </div>
           </form>

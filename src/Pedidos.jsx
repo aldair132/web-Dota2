@@ -29,7 +29,7 @@ export default function Pedidos({ productos, onCambio }) {
   const total = useMemo(() => lista.reduce((s, p) => s + Number(p.total || 0), 0), [lista])
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }))
 
-  // Elegir un item del catálogo rellena detalle y total
+  // Elegir un set del catálogo rellena detalle y total
   const elegir = (id) => {
     const p = productos.find((x) => x.id === id)
     setForm((f) => ({ ...f, productoId: id, detalle: p ? p.nombre : f.detalle, total: p?.precio ?? f.total }))
@@ -45,7 +45,7 @@ export default function Pedidos({ productos, onCambio }) {
       })
       if (error) throw error
 
-      // Descuenta 1 del stock, o marca como vendido si el item no lleva stock
+      // Descuenta 1 del stock, o marca como vendido si el set no lleva stock
       const p = productos.find((x) => x.id === form.productoId)
       if (p && form.descontar) {
         const cambio = p.stock != null ? { stock: Math.max(0, p.stock - 1) } : { vendido: true }
@@ -98,21 +98,21 @@ export default function Pedidos({ productos, onCambio }) {
             <label><span className={etiqueta}>Cliente</span><input required value={form.cliente} onChange={(e) => set('cliente', e.target.value)} placeholder="Nombre o número" className={campo} /></label>
             <label><span className={etiqueta}>Fecha</span><input required type="date" value={form.fecha} onChange={(e) => set('fecha', e.target.value)} className={campo} /></label>
           </div>
-          <label className="block"><span className={etiqueta}>Item del catálogo (opcional)</span>
+          <label className="block"><span className={etiqueta}>Set del catálogo (opcional)</span>
             <select value={form.productoId} onChange={(e) => elegir(e.target.value)} className={campo}>
               <option value="">— Escribir manualmente —</option>
               {productos.map((p) => <option key={p.id} value={p.id}>{p.nombre}{p.precio != null ? ` · ${soles(p.precio)}` : ''}</option>)}
             </select>
           </label>
           <div className="grid sm:grid-cols-[1fr_10rem] gap-3">
-            <label><span className={etiqueta}>Detalle</span><input required value={form.detalle} onChange={(e) => set('detalle', e.target.value)} placeholder="Ej: Arcana Juggernaut + courier" className={campo} /></label>
+            <label><span className={etiqueta}>Detalle</span><input required value={form.detalle} onChange={(e) => set('detalle', e.target.value)} placeholder="Ej: Set de Juggernaut + set de Pudge" className={campo} /></label>
             <label><span className={etiqueta}>Total (S/)</span><input required type="number" step="0.01" min="0" value={form.total} onChange={(e) => set('total', e.target.value)} className={campo} /></label>
           </div>
           <label className="block"><span className={etiqueta}>Nota</span><input value={form.nota} onChange={(e) => set('nota', e.target.value)} placeholder="Método de pago, Steam del cliente…" className={campo} /></label>
           {elegido && (
             <label className="flex items-center gap-2 text-sm">
               <input type="checkbox" checked={form.descontar} onChange={(e) => set('descontar', e.target.checked)} className="accent-brand-red" />
-              {elegido.stock != null ? `Descontar 1 del stock (quedan ${elegido.stock})` : 'Marcar el item como vendido'}
+              {elegido.stock != null ? `Descontar 1 del stock (quedan ${elegido.stock})` : 'Marcar el set como vendido'}
             </label>
           )}
           <div className="flex justify-end gap-2">

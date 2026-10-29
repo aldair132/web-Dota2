@@ -25,17 +25,13 @@ const leerCarrito = () => {
   try { return JSON.parse(localStorage.getItem('carrito')) || [] } catch { return [] }
 }
 
-const chip = (activo) =>
-  `shrink-0 whitespace-nowrap px-4 py-2 rounded-lg text-xs sm:text-sm font-semibold transition ${activo ? 'bg-brand-red text-white shadow-[0_0_14px_rgba(194,60,42,.45)]' : 'bg-brand-panel text-brand-text/80 hover:bg-brand-panel2 border border-brand-borde'}`
-const filaScroll = 'flex gap-2 overflow-x-auto md:flex-wrap pb-1 -mx-3 px-3 md:mx-0 md:px-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden'
 const campo = 'bg-brand-panel border border-brand-borde text-base md:text-sm rounded-lg px-3 py-2 text-brand-text placeholder:text-brand-muted focus:outline-none focus:border-brand-gold'
 
 export default function Tienda() {
   const [productos, setProductos] = useState(null)
-  const [categorias, setCategorias] = useState([])
   const [testimonios, setTestimonios] = useState([])
   const [error, setError] = useState('')
-  const [cat, setCat] = useState('todos')
+  const [heroe, setHeroe] = useState('todos')
   const [rar, setRar] = useState('todas')
   const [atr, setAtr] = useState('todos')
   const [orden, setOrden] = useState('recientes')
@@ -50,15 +46,13 @@ export default function Tienda() {
   const [aviso, setAviso] = useState('')
 
   const cargar = useCallback(async () => {
-    if (!configurado) { setProductos(DEMO.productos); setCategorias(DEMO.categorias); setTestimonios(DEMO.testimonios); return }
-    const [p, c, t] = await Promise.all([
+    if (!configurado) { setProductos(DEMO.productos); setTestimonios(DEMO.testimonios); return }
+    const [p, t] = await Promise.all([
       supabase.from('productos').select('*').order('creado_en', { ascending: false }),
-      supabase.from('categorias').select('*').order('orden', { ascending: true }),
       supabase.from('testimonios').select('*').order('creado_en', { ascending: false }),
     ])
     if (p.error) setError('No se pudo cargar el catálogo. Recarga la página.')
     else { setError(''); setProductos(p.data) }
-    setCategorias(c.error ? [] : c.data)
     setTestimonios(t.error ? [] : t.data)
   }, [])
 
@@ -112,18 +106,8 @@ export default function Tienda() {
   const cambiarCantidad = (id, cant) => setCarrito((c) => c.map((x) => (x.id === id ? { ...x, cant: Math.max(1, cant) } : x)))
   const quitar = (id) => setCarrito((c) => c.filter((x) => x.id !== id))
 
-  // Categorías para los filtros: las de la base de datos, o las que usan los productos
-  const listaCats = useMemo(() => {
-    if (categorias.length) return categorias
-    return [...new Set((productos || []).map((p) => p.categoria))].map((nombre) => ({ id: nombre, nombre, emoji: '' }))
-  }, [categorias, productos])
-
-  // Si la categoría elegida ya no existe (se renombró o quedó vacía), vuelve a "Todos"
-  useEffect(() => {
-    if (productos && cat !== 'todos' && !listaCats.some((c) => c.nombre === cat)) setCat('todos')
-  }, [productos, listaCats, cat])
-
   const publicos = useMemo(() => (productos || []).filter((p) => p.disponible), [productos])
+  const heroesConSets = useMemo(() => [...new Set(publicos.map((p) => p.heroe).filter(Boolean))].sort(), [publicos])
   const destacados = useMemo(() => publicos.filter((p) => p.destacado && puedeComprar(p)), [publicos])
 
   const visibles = useMemo(() => {
@@ -132,7 +116,7 @@ export default function Tienda() {
     const max = pMax === '' ? Infinity : Number(pMax)
     return publicos
       .filter((p) =>
-        (cat === 'todos' || p.categoria === cat) &&
+        (heroe === 'todos' || p.heroe === heroe) &&
         (rar === 'todas' || p.rareza === rar) &&
         (atr === 'todos' || p.atributo === atr) &&
         (p.precio == null || (p.precio >= min && p.precio <= max)) &&
@@ -140,10 +124,10 @@ export default function Tienda() {
       )
       // Los vendidos/agotados van al final
       .sort((a, b) => (puedeComprar(b) - puedeComprar(a)) || ORDENES[orden].fn(a, b))
-  }, [publicos, cat, rar, atr, pMin, pMax, q, orden])
+  }, [publicos, heroe, rar, atr, pMin, pMax, q, orden])
 
-  const hayFiltros = cat !== 'todos' || rar !== 'todas' || atr !== 'todos' || pMin !== '' || pMax !== '' || q !== ''
-  const limpiarFiltros = () => { setCat('todos'); setRar('todas'); setAtr('todos'); setPMin(''); setPMax(''); setQ('') }
+  const hayFiltros = heroe !== 'todos' || rar !== 'todas' || atr !== 'todos' || pMin !== '' || pMax !== '' || q !== ''
+  const limpiarFiltros = () => { setHeroe('todos'); setRar('todas'); setAtr('todos'); setPMin(''); setPMax(''); setQ('') }
 
   const enlaces = [
     { href: '#inicio', texto: 'Inicio' },
@@ -161,7 +145,7 @@ export default function Tienda() {
     <div className="min-h-screen flex flex-col overflow-x-hidden">
       {/* Barra superior */}
       <div className="bg-gradient-to-r from-brand-redDark via-brand-red to-brand-redDark text-white text-[11px] sm:text-xs py-2 text-center px-3 sm:px-4 tracking-wide sm:tracking-wider font-medium">
-        ⚔️ Items, sets, arcanas e inmortales de Dota 2 · Entrega por intercambio de Steam ⚔️
+        ⚔️ Sets completos de Dota 2 para todos los héroes · Entrega por intercambio de Steam ⚔️
       </div>
 
       <Encabezado enlaces={enlaces} enCarrito={enCarrito} sesion={sesion} onCarrito={() => setVerCarrito(true)} onAdmin={() => setAdmin(true)} />
@@ -170,21 +154,21 @@ export default function Tienda() {
       <section id="inicio" className="hero-bg scroll-mt-24 py-12 sm:py-20 px-4 border-b border-brand-borde">
         <div className="max-w-3xl w-full mx-auto flex flex-col items-center text-center">
           <span className="inline-block px-3.5 py-1 bg-brand-red/15 rounded text-[10px] sm:text-xs uppercase tracking-[.25em] text-brand-gold font-semibold mb-5 border border-brand-red/50">
-            Tienda de cosméticos de Dota 2
+            Tienda de sets de Dota 2
           </span>
           <h1 className="font-serif text-3xl sm:text-5xl lg:text-6xl font-black mb-4 leading-tight tracking-wide texto-oro">
             Equipa a tu héroe como se merece
           </h1>
           <p className="text-sm sm:text-lg text-brand-text/80 max-w-xl mb-8 leading-relaxed">
-            Arcanas, inmortales, sets y couriers a los mejores precios. Pide por WhatsApp y recíbelo por intercambio en Steam.
+            Sets completos para tu héroe favorito a los mejores precios. Pide por WhatsApp y recíbelo por intercambio en Steam.
           </p>
           <div className="flex flex-col min-[420px]:flex-row justify-center items-center gap-3 w-full max-w-xs min-[420px]:max-w-none">
             <a href="#catalogo" className="w-full min-[420px]:w-auto bg-brand-red hover:bg-brand-redDark text-white px-8 py-3 rounded-lg text-sm font-bold uppercase tracking-wider transition shadow-[0_0_24px_rgba(194,60,42,.45)] text-center">
-              Ver items
+              Ver sets
             </a>
             <a href={enlaceWhatsApp({ nombre: 'Consulta general' })} target="_blank" rel="noopener noreferrer"
                className="w-full min-[420px]:w-auto bg-transparent text-brand-gold border border-brand-gold/60 hover:bg-brand-gold/10 px-8 py-3 rounded-lg text-sm font-bold uppercase tracking-wider transition text-center">
-              Pedir un item
+              Pedir un set
             </a>
           </div>
           <ul className="mt-10 grid grid-cols-3 gap-3 sm:gap-6 w-full max-w-xl text-[11px] sm:text-xs text-brand-muted">
@@ -227,17 +211,19 @@ export default function Tienda() {
       <main id="catalogo" className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-8 sm:py-10 flex-grow w-full scroll-mt-20 sm:scroll-mt-24">
         <div className="flex flex-col gap-3 mb-6 sm:mb-8 pb-4 border-b border-brand-borde">
           <div className="flex flex-col md:flex-row justify-between md:items-center gap-3">
-            {/* Filtros por categoría: fila deslizable en celular */}
-            <div className={filaScroll}>
-              {[{ nombre: 'todos', etiqueta: 'Todos' }, ...listaCats.map((c) => ({ nombre: c.nombre, etiqueta: `${c.emoji ? c.emoji + ' ' : ''}${c.nombre}` }))].map((c) => (
-                <button key={c.nombre} onClick={() => setCat(c.nombre)} className={chip(cat === c.nombre)}>{c.etiqueta}</button>
-              ))}
+            <h2 className="font-serif text-2xl sm:text-3xl font-bold texto-oro shrink-0">Catálogo de sets</h2>
+            <div className="flex flex-col sm:flex-row gap-2 w-full md:w-auto">
+              {/* Solo aparecen los héroes que tienen sets a la venta */}
+              <select value={heroe} onChange={(e) => setHeroe(e.target.value)} aria-label="Filtrar por héroe" className={`${campo} w-full sm:w-56`}>
+                <option value="todos">Todos los héroes ({heroesConSets.length})</option>
+                {heroesConSets.map((h) => <option key={h} value={h}>{h}</option>)}
+              </select>
+              <label className="relative w-full md:w-72 shrink-0">
+                <span className="sr-only">Buscar set o héroe</span>
+                <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar set o héroe…" className={`${campo} w-full pl-9`} />
+                <Icono n="search" className="w-3.5 h-3.5 absolute left-3.5 top-3.5 md:top-3 text-brand-muted" />
+              </label>
             </div>
-            <label className="relative w-full md:w-72 shrink-0">
-              <span className="sr-only">Buscar item o héroe</span>
-              <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar item o héroe…" className={`${campo} w-full pl-9`} />
-              <Icono n="search" className="w-3.5 h-3.5 absolute left-3.5 top-3.5 md:top-3 text-brand-muted" />
-            </label>
           </div>
 
           {/* Filtro por rareza */}
@@ -281,20 +267,20 @@ export default function Tienda() {
 
           {productos && (
             <div className="flex items-center justify-between text-xs text-brand-muted">
-              <span>{visibles.length} item(s)</span>
+              <span>{visibles.length} set(s)</span>
               {hayFiltros && <button onClick={limpiarFiltros} className="text-brand-gold underline">Limpiar filtros</button>}
             </div>
           )}
         </div>
 
         {error && <p className="text-center py-16 text-red-400">{error}</p>}
-        {!error && !productos && <p className="text-center py-16 text-brand-muted">Cargando items…</p>}
+        {!error && !productos && <p className="text-center py-16 text-brand-muted">Cargando sets…</p>}
 
         {productos && visibles.length === 0 && (
           <div className="text-center py-16">
             <div className="w-16 h-16 bg-brand-panel2 text-brand-gold rounded-full flex items-center justify-center mx-auto mb-3 border border-brand-borde"><Icono n="sword" className="w-7 h-7" /></div>
-            <h3 className="font-serif text-2xl text-brand-gold font-bold">No hay items para mostrar</h3>
-            <p className="text-sm text-brand-muted mt-1">Prueba con otros filtros o pídenos el item por WhatsApp.</p>
+            <h3 className="font-serif text-2xl text-brand-gold font-bold">No hay sets para mostrar</h3>
+            <p className="text-sm text-brand-muted mt-1">Prueba con otros filtros o pídenos el set por WhatsApp.</p>
           </div>
         )}
 
@@ -325,7 +311,6 @@ export default function Tienda() {
               <div className="flex flex-wrap items-center gap-2 mb-2">
                 <Rareza r={detalle.rareza} />
                 <Etiqueta e={detalle.etiqueta} />
-                <span className="text-xs font-semibold uppercase tracking-wider text-brand-muted">{detalle.categoria}</span>
               </div>
               <h3 className="font-serif text-2xl font-bold text-brand-gold mb-1 break-words">{detalle.nombre}</h3>
               {detalle.heroe && (
@@ -386,7 +371,7 @@ export default function Tienda() {
       )}
 
       {/* Admin */}
-      {admin && <AdminModal sesion={sesion} productos={productos || []} categorias={categorias} onCambio={cargar} onCerrar={cerrarAdmin} />}
+      {admin && <AdminModal sesion={sesion} productos={productos || []} onCambio={cargar} onCerrar={cerrarAdmin} />}
 
       <Pie enlaces={enlaces} onAdmin={() => setAdmin(true)} />
     </div>

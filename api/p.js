@@ -17,7 +17,7 @@ export default async function handler(req, res) {
   if (!p) { res.redirect(302, '/'); return }
 
   const titulo = `${p.nombre}${p.precio != null ? ` · S/ ${Number(p.precio).toFixed(2)}` : ''}`
-  const desc = (p.descripcion || [p.heroe, p.rareza].filter(Boolean).join(' · ') || 'Item de Dota 2').replace(/\s+/g, ' ').slice(0, 160)
+  const desc = (p.descripcion || [p.heroe, p.rareza].filter(Boolean).join(' · ') || 'Set de Dota 2').replace(/\s+/g, ' ').slice(0, 160)
   const img = p.fotos?.[0] || ''
   const destino = `/#/producto/${id}`
   const url = `https://${req.headers.host}/p/${id}`
@@ -37,6 +37,6 @@ ${img ? `<meta property="og:image" content="${esc(img)}">\n<meta name="twitter:c
 <meta http-equiv="refresh" content="0;url=${destino}">
 </head><body>
 <script>location.replace(${JSON.stringify(destino)})</script>
-<a href="${destino}">Ver item</a>
+<a href="${destino}">Ver set</a>
 </body></html>`)
 }

@@ -21,7 +21,7 @@ export default function Carrito({ lineas, onCantidad, onQuitar, onVaciar, onCerr
             <div className="text-center py-16 text-brand-muted">
               <Icono n="cart" className="w-10 h-10 mx-auto mb-3 text-brand-borde" />
               <p>Tu carrito está vacío.</p>
-              <p className="text-xs mt-1">Agrega items desde el catálogo.</p>
+              <p className="text-xs mt-1">Agrega sets desde el catálogo.</p>
             </div>
           ) : (
             <ul className="space-y-3">

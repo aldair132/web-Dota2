@@ -48,7 +48,7 @@ export function Precio({ p, grande = false }) {
   )
 }
 
-// Cinta que tapa la imagen cuando el item no se puede comprar
+// Cinta que tapa la imagen cuando el set no se puede comprar
 export function Agotado({ p }) {
   if (puedeComprar(p)) return null
   return (
@@ -68,7 +68,6 @@ export default function Tarjeta({ p, onVer, onAgregar }) {
              className="product-card bg-brand-panel rounded-xl overflow-hidden border border-brand-borde flex flex-col">
       <div className="relative">
         <Carrusel fotos={p.fotos} alt={p.nombre} className="aspect-video" />
-        <span className="absolute top-2.5 left-2.5 bg-black/70 text-brand-text text-[10px] sm:text-[11px] font-semibold px-2.5 py-1 rounded uppercase tracking-wider pointer-events-none">{p.categoria}</span>
         <span className="absolute top-2.5 right-2.5 flex flex-col items-end gap-1 pointer-events-none">
           {d > 0 && <span className="bg-brand-red text-white text-xs font-black px-2 py-0.5 rounded">-{d}%</span>}
           <Etiqueta e={p.etiqueta} />

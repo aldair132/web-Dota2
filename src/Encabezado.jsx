@@ -53,7 +53,7 @@ export default function Encabezado({ enlaces, enCarrito, sesion, onCarrito, onAd
               <span className="hidden xl:inline">Gestionar tienda</span>
             </button>
           )}
-          <button onClick={onCarrito} aria-label={`Abrir carrito (${enCarrito} items)`}
+          <button onClick={onCarrito} aria-label={`Abrir carrito (${enCarrito} sets)`}
                   className="relative bg-brand-red hover:bg-brand-redDark text-white w-10 h-10 sm:w-auto sm:h-auto sm:px-4 sm:py-2 rounded-lg text-sm font-semibold transition flex items-center justify-center gap-2">
             <Icono n="cart" className="w-5 h-5 sm:w-4 sm:h-4" />
             <span className="hidden sm:inline">Carrito</span>

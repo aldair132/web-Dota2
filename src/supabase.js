@@ -1,6 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
 
-// Sin .env la tienda arranca en modo demo con items de ejemplo
+// Sin .env la tienda arranca en modo demo con sets de ejemplo
 export const configurado = Boolean(import.meta.env.VITE_SUPABASE_URL)
 
 export const supabase = createClient(

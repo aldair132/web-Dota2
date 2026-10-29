@@ -13,7 +13,7 @@ export default function Pie({ enlaces, onAdmin }) {
         <div>
           <Logo chico />
           <p className="text-sm text-brand-muted mt-4 max-w-xs leading-relaxed">
-            Arcanas, inmortales, sets y couriers de Dota 2 a buen precio, con entrega por intercambio de Steam.
+            Sets completos de Dota 2 para todos los héroes, a buen precio y con entrega por intercambio de Steam.
           </p>
         </div>
 
